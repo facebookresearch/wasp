@@ -2,10 +2,12 @@
 Agentic sampling loop that calls the Anthropic API and local implementation of anthropic-defined computer use tools.
 """
 
+import json
 import platform
 from collections.abc import Callable
 from datetime import datetime
 from enum import StrEnum
+import sys
 from typing import Any, cast
 
 import httpx
@@ -85,12 +87,29 @@ async def sampling_loop(
     tool_version: ToolVersion,
     thinking_budget: int | None = None,
     token_efficient_tools_beta: bool = False,
+    autologin_tool_calls_sequence: list[dict[str, Any]] = [],
+    login_url="",
 ):
     """
     Agentic sampling loop for the assistant/tool interaction of computer use.
     """
     tool_group = TOOL_GROUPS_BY_VERSION[tool_version]
     tool_collection = ToolCollection(*(ToolCls() for ToolCls in tool_group.tools))
+
+    if len(autologin_tool_calls_sequence) > 0:
+        print(f"Executing scripted log-in at {login_url}", file=sys.stderr)
+        for content_block in autologin_tool_calls_sequence:
+            if content_block["type"] == "tool_use":
+                if (
+                    content_block["input"]["action"] == "type"
+                    and content_block["input"]["text"] == "__LOGIN_URL__"
+                ):
+                    content_block["input"]["text"] = login_url
+                result = await tool_collection.run(
+                    name=content_block["name"],
+                    tool_input=cast(dict[str, Any], content_block["input"]),
+                )
+
     system = BetaTextBlockParam(
         type="text",
         text=f"{SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}",
@@ -181,11 +200,13 @@ async def sampling_loop(
                 tool_output_callback(result, content_block["id"])
 
         if not tool_result_content:
+            last_assistant_message = messages[-1]
+            print(json.dumps(last_assistant_message))
             return messages
 
         messages.append({"content": tool_result_content, "role": "user"})
 
-    print(f"Exhausted {max_actions} actions limit")
+    print(f"Exhausted {max_actions} actions limit", file=sys.stderr)
     return messages
 
 
@@ -326,4 +347,3 @@ def _maybe_prepend_system_tool_result(result: ToolResult, result_text: str):
     if result.system:
         result_text = f"<system>{result.system}</system>\n{result_text}"
     return result_text
-

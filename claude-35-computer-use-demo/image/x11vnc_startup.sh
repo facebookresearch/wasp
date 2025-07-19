@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "starting vnc"
+echo "starting vnc" >&2
 
 (x11vnc -display $DISPLAY \
     -forever \

@@ -1,0 +1,107 @@
+[
+    {
+        "id": "toolu_bdrk_01LLmPuM9DdB8YBvua1ZDULi",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                806,
+                737
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01D9sAYf3MriwxjU2SC1TZaw",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                294,
+                100
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01XtHfSvef5RUqVHqKocNyKQ",
+        "input": {
+            "action": "type",
+            "text": "__LOGIN_URL__"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_013y1W2Ri9T2TdBUWNt4hdZ5",
+        "input": {
+            "action": "key",
+            "text": "Return"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01QKrTKTrvZJsex6ywjdRuNC",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                371,
+                353
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01R2siuWJXyqCHAWBaDjJbuv",
+        "input": {
+            "action": "type",
+            "text": "MarvelsGrantMan136"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01BPY3GTkYeb5mDAjWn5AhJj",
+        "input": {
+            "action": "key",
+            "text": "Tab"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01YFCwXq8AdYHYZFcfZx6c2G",
+        "input": {
+            "action": "type",
+            "text": "test1234"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01RzJH1VgWTQ3RS468V5q7Le",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                202,
+                489
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_011PNrkLvF5RVFdPmyPogBmc",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                487,
+                350
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    }
+]

@@ -1,0 +1,116 @@
+[
+    {
+        "id": "toolu_bdrk_01115rPVg1NCQJVRGWV5YfZP",
+        "input": {
+            "action": "mouse_move",
+            "coordinate": [
+                804,
+                738
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01WqfsUWMsCwyF6sZRScNvUK",
+        "input": {
+            "action": "left_click"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01ShAer5atvNuPnuMaFnysgz",
+        "input": {
+            "action": "mouse_move",
+            "coordinate": [
+                400,
+                101
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01FsQbt3ZK5DuDFCneoSFXnC",
+        "input": {
+            "action": "left_click"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_018TDNmkronApJqmGhYEyxEG",
+        "input": {
+            "action": "type",
+            "text": "__LOGIN_URL__"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01LYvx72qmXpjfYyqB9UbYs4",
+        "input": {
+            "action": "key",
+            "text": "Return"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01PSjXxcaHEPmY9rD6xDSh5r",
+        "input": {
+            "action": "type",
+            "text": "byteblaze"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01DFCK4BWCxgcDLGX9XCwhYC",
+        "input": {
+            "action": "key",
+            "text": "Tab"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01SQSbS2wg6iyUvRqtmXvQ3m",
+        "input": {
+            "action": "type",
+            "text": "hello1234"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_015K67kav8oaQj6x5VadU4gP",
+        "input": {
+            "action": "key",
+            "text": "Return"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01KBigvf24hmvs3UC74gkHvd",
+        "input": {
+            "action": "mouse_move",
+            "coordinate": [
+                487,
+                350
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01JqQq4Dj8jTp8d6wLRGXsqu",
+        "input": {
+            "action": "left_click"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    }
+]

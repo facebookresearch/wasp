@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e  # Exit on error
+set -e # Exit on error
 
 DPI=96
 RES_AND_DEPTH=${WIDTH}x${HEIGHT}x24
@@ -7,9 +7,9 @@ RES_AND_DEPTH=${WIDTH}x${HEIGHT}x24
 # Function to check if Xvfb is already running
 check_xvfb_running() {
     if [ -e /tmp/.X${DISPLAY_NUM}-lock ]; then
-        return 0  # Xvfb is already running
+        return 0 # Xvfb is already running
     else
-        return 1  # Xvfb is not running
+        return 1 # Xvfb is not running
     fi
 }
 
@@ -29,7 +29,7 @@ wait_for_xvfb() {
 
 # Check if Xvfb is already running
 if check_xvfb_running; then
-    echo "Xvfb is already running on display ${DISPLAY}"
+    echo "Xvfb is already running on display ${DISPLAY}" >&2
     exit 0
 fi
 
@@ -39,10 +39,10 @@ XVFB_PID=$!
 
 # Wait for Xvfb to start
 if wait_for_xvfb; then
-    echo "Xvfb started successfully on display ${DISPLAY}"
-    echo "Xvfb PID: $XVFB_PID"
+    echo "Xvfb started successfully on display ${DISPLAY}" >&2
+    echo "Xvfb PID: $XVFB_PID" >&2
 else
-    echo "Xvfb failed to start"
+    echo "Xvfb failed to start" >&2
     kill $XVFB_PID
     exit 1
 fi

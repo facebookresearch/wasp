@@ -1,0 +1,35 @@
+deployment_model_name:
+  claude_35_v2: "your_deployment_model_name_here"
+  claude_37_thinking: "your_deployment_model_name_here"
+  claude_4_sonnet: "your_deployment_model_name_here"
+  o1: "your_deployment_model_name_here"
+  gpt_4o: "your_deployment_model_name_here"
+  gpt_4o_mini: "your_deployment_model_name_here"
+
+model_providers:
+  claude: "bedrock"
+  gpt: "azure"
+
+scaffolding_directory:
+  curi_35: "${oc.env:PWD}/../claude-35-computer-use-demo"  # Resolves to absolute path using current directory
+  curi_37: "${oc.env:PWD}/../claude-37-computer-use-demo"  # Resolves to absolute path using current directory
+  tool_calling: "${oc.env:PWD}"  # Resolves to absolute path using current directory
+  visualwebarena: "${oc.env:PWD}/../visualwebarena"  # Resolves to absolute path using current directory
+
+base_log_directory: your_logs_base_directory_here
+skip_environment_setup: False
+skip_agent: False
+skip_evaluation: False
+skip_environment_cleanup: False
+env_deployments: 
+  - "your_webarena_deployment_ip_here" 
+tasks: "${oc.env:PWD}/${experiment.tasks}"
+
+hydra:
+  run:
+    dir: ${base_log_directory}/${experiment.short_model_name}-${experiment.scaffolding}-${experiment.experiment_group}
+  sweep:
+    dir: ${base_log_directory}
+    subdir: ${experiment.short_model_name}-${experiment.scaffolding}-${experiment.experiment_group}
+  job:
+    chdir: False 

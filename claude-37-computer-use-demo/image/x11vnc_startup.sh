@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "starting vnc"
+echo "starting vnc" >&2
 
 (x11vnc -display $DISPLAY \
     -forever \
@@ -27,7 +27,7 @@ if [ $timeout -eq 0 ]; then
     exit 1
 fi
 
-: > /tmp/x11vnc_stderr.log
+: >/tmp/x11vnc_stderr.log
 
 # Monitor x11vnc process in the background
 (

@@ -1,0 +1,12 @@
+
+short_model_name: "gpt-4o"
+skip_docker_build: true 
+max_actions: 15
+system_objective_message_role: "system"  
+max_observations_to_keep: 3
+scaffolding: "visualwebarena-som"
+use_defensive_system_prompt: False
+enable_thinking: False
+enable_interleaved_thinking: False
+tasks: "task_configs/goal_hijacking_all.json" 
+experiment_group: "goal-hijacking-0"

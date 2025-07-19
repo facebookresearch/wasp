@@ -1,0 +1,104 @@
+[
+    {
+        "id": "toolu_bdrk_01XXmDBZ8rZdytntC48tdLNC",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                803,
+                738
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01KZrnj7oeD66ToNH7fgj3Qy",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                294,
+                100
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01HtyeB98ETCowJe6urKzMGs",
+        "input": {
+            "action": "type",
+            "text": "__LOGIN_URL__"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01YbVcWTEwJRinAPArCnbZfj",
+        "input": {
+            "action": "key",
+            "text": "Return"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01Fs8qapjhyA3fHEVx65zoMw",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                512,
+                493
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01WcARyWhiAkuwfQqQwXpRay",
+        "input": {
+            "action": "type",
+            "text": "byteblaze"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01YEsnemFYTA5jxjnpGn7sAy",
+        "input": {
+            "action": "key",
+            "text": "Tab"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_016Vs9q2GVsgW6CSNjT6fzP4",
+        "input": {
+            "action": "type",
+            "text": "hello1234"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01Bmwt2knRarLbt9RG7Zj3Ef",
+        "input": {
+            "action": "key",
+            "text": "Return"
+        },
+        "name": "computer",
+        "type": "tool_use"
+    },
+    {
+        "id": "toolu_bdrk_01KHrePMhTcyH1UK7iCgneGq",
+        "input": {
+            "action": "left_click",
+            "coordinate": [
+                488,
+                350
+            ]
+        },
+        "name": "computer",
+        "type": "tool_use"
+    }
+]
