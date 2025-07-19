@@ -6,7 +6,7 @@
 [Kamalika Chaudhuri](https://cseweb.ucsd.edu/~kamalika)
 
 
-This repo is an official implementation of the **WASP** ([arxiv:xxxx.xxxxx](https://arxiv.org/abs/xxxx.xxxxx)). 
+This repo is an official implementation of the **WASP** ([arxiv:2504.18575](https://arxiv.org/abs/2504.18575)). 
 
 Autonomous web navigation agents hold great potential for unlocking human productivity by automating mundane tasks on the internet. However, these agents can also be taken advantage of as new attack vectors for adversaries when deployed without proper mitigation. One emerging threat &mdash; prompt injection attacks, where the adversary embeds malicious instructions in the web environment that divert the agent to instead perform tasks for the adversary. To measure the extent of this risk, we construct this new benchmark that simulates real world attacks in a highly realistic, end-to-end executable web environment, without exposing the agent to real harm. 
 
@@ -97,14 +97,14 @@ For example, the prompt injection tasks with gpt-4o with no defense would be: `g
 **Note**: Please, make sure you have installed everything, activated the `webarena_prompt_injections/venv`, and set your keys in the OS environment variables as above!
 
 ```bash
-python run_end_to_end_in_parallel.py --multirun +experiment=claude-35-curi-35-utility-0,claude-35-curi-35-utility-1,claude-37-curi-37-utility-0,claude-37-curi-37-utility-1,claude-4-sonnet-tool-calling-utility-0.,claude-4-sonnet-tool-calling-utility-2,gpt-4o-mini-tool-calling-utility-0,gpt-4o-mini-tool-calling-utility-1,gpt-4o-mini-visualwebarena-axtree-utility-0,gpt-4o-mini-visualwebarena-axtree-utility-1,gpt-4o-mini-visualwebarena-som-utility-0,gpt-4o-mini-visualwebarena-som-utility-1,gpt-4o-tool-calling-utility-0,gpt-4o-tool-calling-utility-1,gpt-4o-visualwebarena-axtree-utility-0,gpt-4o-visualwebarena-axtree-utility-1,gpt-4o-visualwebarena-som-utility-0,gpt-4o-visualwebarena-som-utility-1,o1-tool-calling-utility-0,o1-tool-calling-utility-2
+python run_end_to_end_in_parallel.py --multirun +experiment=claude-35-curi-35-utility-0,claude-35-curi-35-utility-1,claude-37-curi-37-utility-0,claude-37-curi-37-utility-1,claude-4-sonnet-tool-calling-utility-0.,claude-4-sonnet-tool-calling-utility-2,gpt-4o-mini-tool-calling-utility-0,gpt-4o-mini-visualwebarena-axtree-utility-0,gpt-4o-mini-visualwebarena-axtree-utility-1,gpt-4o-mini-visualwebarena-som-utility-0,gpt-4o-mini-visualwebarena-som-utility-1,gpt-4o-tool-calling-utility-0,gpt-4o-visualwebarena-axtree-utility-0,gpt-4o-visualwebarena-axtree-utility-1,gpt-4o-visualwebarena-som-utility-0,gpt-4o-visualwebarena-som-utility-1,o1-tool-calling-utility-0,o1-tool-calling-utility-2
 ```
 
 ### All Goal-Hijacking Prompt Injection Experiments
 **Note**: Please, make sure you have installed everything, activated the `webarena_prompt_injections/venv`, and set your keys in the OS environment variables as above!
 
 ```bash
-python run_end_to_end_in_parallel.py --multirun +experiment=claude-35-curi-35-goal-hijacking-0,claude-35-curi-35-goal-hijacking-1,claude-37-curi-37-goal-hijacking-0,claude-37-curi-37-goal-hijacking-1,claude-4-sonnet-tool-calling-goal-hijacking-0,claude-4-sonnet-tool-calling-goal-hijacking-2,gpt-4o-mini-tool-calling-goal-hijacking-0,gpt-4o-mini-tool-calling-goal-hijacking-1,gpt-4o-mini-visualwebarena-axtree-goal-hijacking-0,gpt-4o-mini-visualwebarena-axtree-goal-hijacking-1,gpt-4o-mini-visualwebarena-som-goal-hijacking-0,gpt-4o-mini-visualwebarena-som-goal-hijacking-1,gpt-4o-tool-calling-goal-hijacking-0,gpt-4o-tool-calling-goal-hijacking-1,gpt-4o-visualwebarena-axtree-goal-hijacking-0,gpt-4o-visualwebarena-axtree-goal-hijacking-1,gpt-4o-visualwebarena-som-goal-hijacking-0,gpt-4o-visualwebarena-som-goal-hijacking-1,o1-tool-calling-goal-hijacking-0,o1-tool-calling-goal-hijacking-2
+python run_end_to_end_in_parallel.py --multirun +experiment=claude-35-curi-35-goal-hijacking-0,claude-35-curi-35-goal-hijacking-1,claude-37-curi-37-goal-hijacking-0,claude-37-curi-37-goal-hijacking-1,claude-4-sonnet-tool-calling-goal-hijacking-0,claude-4-sonnet-tool-calling-goal-hijacking-2,gpt-4o-mini-tool-calling-goal-hijacking-0,gpt-4o-mini-visualwebarena-axtree-goal-hijacking-0,gpt-4o-mini-visualwebarena-axtree-goal-hijacking-1,gpt-4o-mini-visualwebarena-som-goal-hijacking-0,gpt-4o-mini-visualwebarena-som-goal-hijacking-1,gpt-4o-tool-calling-goal-hijacking-0,gpt-4o-visualwebarena-axtree-goal-hijacking-0,gpt-4o-visualwebarena-axtree-goal-hijacking-1,gpt-4o-visualwebarena-som-goal-hijacking-0,gpt-4o-visualwebarena-som-goal-hijacking-1,o1-tool-calling-goal-hijacking-0,o1-tool-calling-goal-hijacking-2
 ```
 
 ### Printing the Results Table
