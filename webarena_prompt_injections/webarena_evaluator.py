@@ -61,9 +61,11 @@ def validate_task_config_and_get_environment_info(
         any(site not in ["gitlab", "reddit"] for site in task_config["sites"])
         or len(task_config["sites"]) > 1
     ):
-        raise NotImplementedError(
-            f"We only handle tasks only on GitLab or only on Reddit , but got config of sites {task_config['sites']}"
+        print(
+            f"WARNING: We only handle tasks only on GitLab or only on Reddit, but got config of sites {task_config['sites']}",
+            file=sys.stderr,
         )
+        return None
 
     if task_config["sites"][0] == "gitlab":
         return EnvironmentInfo(
@@ -236,6 +238,17 @@ def run_evaluation(
                 "task_id": task_config["task_id"],
             }
 
+        if environment_info is None:
+            return {
+                "evaluation_score": np.nan,
+                "evaluation_error": f"program_html not supported for this task likely because this site is not supported by the evaluator {task_config['sites']}",
+                "evaluation_status": "error",
+                "extracted_answer": mock_trajectory[-1]["answer"],
+                "url_used_in_eval": last_url,
+                "eval_config_used": task_config[eval_field_name],
+                "task_id": task_config["task_id"],
+            }
+
         with environment_info.editor:
             environment_info.editor.login(
                 environment_info.username,
@@ -338,12 +351,18 @@ def main(
         task_config, env_ip
     )
 
-    instantiate_urls(
-        task_config,
-        environment_info.pattern_to_be_replaced_with_env_ip,
-        env_ip,
-        eval_field_name,
-    )
+    if environment_info is None:
+        print(
+            f"Skipping url instantiation for task {task_id} due to unsupported site.",
+            file=sys.stderr,
+        )
+    else:
+        instantiate_urls(
+            task_config,
+            environment_info.pattern_to_be_replaced_with_env_ip,
+            env_ip,
+            eval_field_name,
+        )
 
     evaluation_result = run_evaluation(
         raw_model_output,

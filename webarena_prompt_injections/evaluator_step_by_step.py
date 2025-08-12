@@ -337,6 +337,34 @@ def _concatenate_gpt_tool_action_observation(conversation_list: list[dict]):
     return str(ax_tree_observation["content"]) + action_description
 
 
+def _concatenate_openai_responses_tool_action_observations(
+    conversation_list: list[dict],
+):
+    has_seen_a_function_call = False
+    has_seen_a_function_call_output_before_the_seen_function_call = False
+    observation_and_action_description = ""
+    action_description = ""
+    for message_in_responses_format in conversation_list[::-1]:
+        if (
+            "type" in message_in_responses_format
+            and message_in_responses_format["type"] == "function_call"
+            and not has_seen_a_function_call
+        ):
+            action_description = f"\n\n\nACTION_DESCRIPTION of large language model agent:\nBased on the OBSERVATION, the next action I take is '{message_in_responses_format['name']}' with the following arguments: {str(message_in_responses_format['arguments'])}\n"
+            has_seen_a_function_call = True
+
+        elif (
+            "type" in message_in_responses_format
+            and message_in_responses_format["type"] == "function_call_output"
+            and has_seen_a_function_call
+            and not has_seen_a_function_call_output_before_the_seen_function_call
+        ):
+            observation_and_action_description = f"{message_in_responses_format['output']}{action_description}"
+            has_seen_a_function_call_output_before_the_seen_function_call = True
+
+    return observation_and_action_description
+
+
 def create_agent_actions_based_on_gpt_tool_use_log(
     jsonl_file_path: str,
     task_index: int,
@@ -384,6 +412,52 @@ def create_agent_actions_based_on_gpt_tool_use_log(
         return []
     except Exception as e:
         print(f"Unknown exception: {e}")
+        return []
+
+
+def create_agent_actions_based_on_openai_responses_web_tools_log(
+    jsonl_file_path: str, task_index: int
+) -> list[AgentAction]:
+    try:
+        # Open the HTML file and read its contents
+        with open(jsonl_file_path, "r") as file:
+            conversations_list = [json.loads(line) for line in file]
+
+        # we anticipate the message list to start with a system message
+        # and then be followed by the user message with the user's objective
+        first_user_message_in_first_conversation = conversations_list[0][1]
+
+        match first_user_message_in_first_conversation:
+            case {
+                "role": "user",
+                "content": legitimate_objective,
+            }:
+                # Extract the text from each paragraph
+                extracted_actions = [
+                    AgentAction(
+                        # we will assume that the second-to-last message is the assistant message
+                        # taking the current action
+                        action_description=_concatenate_openai_responses_tool_action_observations(
+                            current_conversation
+                        ),
+                        task_index=task_index,
+                        legitimate_objective=legitimate_objective,
+                        source_file=jsonl_file_path,
+                        step_index=index,
+                        # dummy False for now
+                        # TODO: extract if the prompt injection has been encountered
+                        injection_in_context_window=False,
+                    )
+                    for index, current_conversation in enumerate(conversations_list[1:])
+                ]
+                return extracted_actions
+            case _:
+                raise ValueError(
+                    f"Message {json.dumps(first_user_message_in_first_conversation)} did not match expected first user message format"
+                )
+
+    except FileNotFoundError:
+        print(f"File {jsonl_file_path} not found.")
         return []
 
 
@@ -575,6 +649,47 @@ def classify_gpt_tool_use_logs(
     )
 
 
+def classify_openai_responses_web_tools_logs(
+    model_inference_driver: ModelInferenceEngine, log_folder: str
+) -> pd.DataFrame:
+    """
+    Parameters:
+        model_inference_driver: this file's object used to manage communication with the model inference API
+        log_folder: the folder where X.jsonl files are stored
+            as a result of running tool_calling_agent.py agent from this repo;
+            we expect each jsonl line to contain a whole list of messages to the OpenAI Tool Use API, representing a turn/step
+        tasks_folder: the folder where the original WebArena json task files were stored
+    Returns:
+        a DataFrame with the model's classificaiton and other relevant info
+    """
+    relevant_filenames_in_log_folder = [
+        x for x in os.listdir(log_folder) if x.endswith("jsonl")
+    ]
+    all_actions_to_classify = []
+    print(
+        f"Number of tasks: {len(relevant_filenames_in_log_folder)}. Preprocessing all task logs..."
+    )
+    for file_name in relevant_filenames_in_log_folder:
+        full_path_to_logs_file = os.path.join(log_folder, file_name)
+
+        index_of_file = extract_number(file_name)
+
+        agent_actions = create_agent_actions_based_on_openai_responses_web_tools_log(
+            full_path_to_logs_file, index_of_file
+        )
+
+        all_actions_to_classify.extend(agent_actions)
+
+    print(
+        f"Total number of actions: {len(all_actions_to_classify)}. Classifying all actions..."
+    )
+    asyncio.run(model_inference_driver.process_all_actions(all_actions_to_classify))
+
+    return pd.DataFrame(
+        [asdict(agent_action) for agent_action in all_actions_to_classify]
+    )
+
+
 def classify_anthropic_api_web_tools_logs(
     model_inference_driver: ModelInferenceEngine, log_folder: str
 ) -> pd.DataFrame:
@@ -688,6 +803,15 @@ def main(log_folder, task_folder, format, model):
                     f"as GPT TOOL USE conversations contain the legitimate user objective."
                 )
             df = classify_gpt_tool_use_logs(
+                model_inference_driver, log_folder=log_folder
+            )
+        case OutputFormat.OPENAI_RESPONSES_WEB_TOOLS:
+            if task_folder:
+                print(
+                    f"WARNING: task_folder argument with value {task_folder} ignored "
+                    f"as OpenAI TOOL USE conversations contain the legitimate user objective."
+                )
+            df = classify_openai_responses_web_tools_logs(
                 model_inference_driver, log_folder=log_folder
             )
         case OutputFormat.ANTHROPIC_API_WEB_TOOLS:

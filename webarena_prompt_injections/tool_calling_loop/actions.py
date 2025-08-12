@@ -656,7 +656,7 @@ def create_mouse_click_action(
 
 @beartype
 def create_clear_action(
-    element_id: str = "",
+    element_id: str | int = "",
     element_role: RolesType = "link",
     element_name: str = "",
     pw_code: str = "",
@@ -666,7 +666,7 @@ def create_clear_action(
     action.update(
         {
             "action_type": ActionTypes.CLEAR,
-            "element_id": element_id,
+            "element_id": str(element_id),
             "element_role": _role2id[element_role],
             "element_name": element_name,
             "nth": nth,
@@ -679,7 +679,7 @@ def create_clear_action(
 @beartype
 def create_upload_action(
     text: str,
-    element_id: str = "",
+    element_id: str | int = "",
     element_role: RolesType = "link",
     element_name: str = "",
     pw_code: str = "",
@@ -689,7 +689,7 @@ def create_upload_action(
     action.update(
         {
             "action_type": ActionTypes.TYPE,
-            "element_id": element_id,
+            "element_id": str(element_id),
             "element_role": _role2id[element_role],
             "element_name": element_name,
             "nth": nth,
@@ -715,7 +715,7 @@ def create_keyboard_type_action(keys: list[int | str] | str) -> Action:
 
 @beartype
 def create_click_action(
-    element_id: str = "",
+    element_id: str | int = "",
     element_role: RolesType = "link",
     element_name: str = "",
     pw_code: str = "",
@@ -725,7 +725,7 @@ def create_click_action(
     action.update(
         {
             "action_type": ActionTypes.CLICK,
-            "element_id": element_id,
+            "element_id": str(element_id),
             "element_role": _role2id[element_role],
             "element_name": element_name,
             "nth": nth,
@@ -737,7 +737,7 @@ def create_click_action(
 
 @beartype
 def create_hover_action(
-    element_id: str = "",
+    element_id: str | int = "",
     element_role: RolesType = "link",
     element_name: str = "",
     pw_code: str = "",
@@ -747,7 +747,7 @@ def create_hover_action(
     action.update(
         {
             "action_type": ActionTypes.HOVER,
-            "element_id": element_id,
+            "element_id": str(element_id),
             "element_role": _role2id[element_role],
             "element_name": element_name,
             "nth": nth,
@@ -760,7 +760,7 @@ def create_hover_action(
 @beartype
 def create_type_action(
     text: str,
-    element_id: str = "",
+    element_id: str | int = "",
     element_role: RolesType = "link",
     element_name: str = "",
     pw_code: str = "",
@@ -770,7 +770,7 @@ def create_type_action(
     action.update(
         {
             "action_type": ActionTypes.TYPE,
-            "element_id": element_id,
+            "element_id": str(element_id),
             "element_role": _role2id[element_role],
             "element_name": element_name,
             "nth": nth,

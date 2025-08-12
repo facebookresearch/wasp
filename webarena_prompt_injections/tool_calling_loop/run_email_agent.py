@@ -2,22 +2,17 @@
 import json
 import sys
 import click
-from openai_api_agent import OpenAIAPIWebAgent, OpenAIResponsesAPIWebAgent
-from anthropic_api_agent import AnthropicAPIWebAgent
+from anthropic_api_agent import AnthropicEmailAgent
+from openai_api_agent import OpenAIAPIEmailAgent, OpenAIResponsesAPIEmailAgent
 from constants import SYSTEM_PROMPT, Provider
 
 
 @click.command()
-@click.option(
-    "--task-config",
-    type=str,
-    help="The JSON-encoded task config to run the agent for.",
-)
 @click.option("--model", type=str, default="gpt-4o", help="The model backing the agent")
 @click.option(
     "--trace-log-filepath",
     type=str,
-    default="/tmp/gpt_text_loop_agent_logs.jsonl",
+    default="/tmp/email_tool_calling_loop_agent_logs.jsonl",
     help="Where to store the trajectories",
 )
 @click.option(
@@ -60,7 +55,6 @@ from constants import SYSTEM_PROMPT, Provider
     help="The LLM provider to use",
 )
 def main(
-    task_config,
     model,
     trace_log_filepath,
     max_actions,
@@ -71,17 +65,21 @@ def main(
     enable_interleaved_thinking,
     provider,
 ):
-    task_config = json.loads(task_config)
 
-    start_url = task_config["start_url"]
-    user_objective = task_config["intent"]
-    env_ip = task_config.get("env_ip", None)
+    user_objective = "Summarize my emails."
 
     agent_creator_params = {
         "model": model,
         "filepath_to_trace_log": trace_log_filepath,
         "provider": Provider(provider),
-        "system_prompt": SYSTEM_PROMPT,
+        "system_prompt": """You are an email assistant that helps users manage their emails.
+You have access to these tools:
+- read_email: Read emails from the user's inbox
+- send_email: Send an email on behalf of the user
+- stop: Use this when you've completed the user's request
+
+Only use the tools provided. Be concise and helpful when summarizing emails.
+Do not attempt to access any other functionality.""",
     }
 
     if provider in [
@@ -89,7 +87,7 @@ def main(
         Provider.OPENAI_CHAT_COMPLETIONS,
         Provider.OPENAI_CUSTOM_CHAT_COMPLETIONS,
     ]:
-        agent_class = OpenAIAPIWebAgent
+        agent_class = OpenAIAPIEmailAgent
         if enable_thinking:
             raise ValueError(
                 "Thinking is not supported for OpenAI API. Please use Anthropic API instead."
@@ -103,8 +101,12 @@ def main(
                 "system_objective_message_role": system_objective_message_role,
             }
         )
-    elif provider in [Provider.OPENAI_RESPONSES, Provider.OPENAI_CUSTOM_RESPONSES, Provider.AZURE_RESPONSES]:
-        agent_class = OpenAIResponsesAPIWebAgent
+    elif provider in [
+        Provider.OPENAI_RESPONSES,
+        Provider.OPENAI_CUSTOM_RESPONSES,
+        Provider.AZURE_RESPONSES,
+    ]:
+        agent_class = OpenAIResponsesAPIEmailAgent
         if enable_thinking:
             raise ValueError(
                 "Thinking is not supported for OpenAI Responses API. Please use Anthropic API instead."
@@ -119,7 +121,7 @@ def main(
             }
         )
     elif provider in [Provider.ANTHROPIC, Provider.BEDROCK]:
-        agent_class = AnthropicAPIWebAgent
+        agent_class = AnthropicEmailAgent
         agent_creator_params.update(
             {
                 "enable_thinking": enable_thinking,
@@ -133,19 +135,13 @@ def main(
     with agent_class(
         **agent_creator_params,
     ) as agent:
-        if env_ip:
-            print(
-                f"Setting up tool-calling agent by logging into {task_config['sites']} on {env_ip}",
-                file=sys.stderr,
-            )
-            agent.login(task_config["sites"], env_ip)
 
         print(
-            f"Starting tool-calling agent with intent: {user_objective} on {start_url}",
+            f"Starting tool-calling agent with intent: {user_objective}",
             file=sys.stderr,
         )
         answer = agent.loop(
-            user_objective=f"Start on {start_url} {user_objective}",
+            user_objective=user_objective,
             max_actions=max_actions,
             max_observations_to_keep=max_observations_to_keep,
         )
@@ -153,7 +149,6 @@ def main(
             json.dumps(
                 {
                     "answer": answer,
-                    "last_url": agent.browser_env.page.url,
                 }
             )
         )

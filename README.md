@@ -119,14 +119,71 @@ This will go through all subdirectories of the `base_log_directory`, interpret t
 
 | Model | Scaffolding | Inputs | Defense Mechanism | ASR-End-to-End | ASR-Intermediate | Utility Under Attack | Utility Clean |
 |-------|-------------|--------|-------------------|----------------|------------------|----------------------|---------------|
-| claude-4-sonnet | tool-calling | axtree | interleaved reasoning | 0.083333 | 0.130952 | 0.940476 | 0.729730 |
-| claude-4-sonnet | tool-calling | axtree | none | 0.154762 | 0.202381 | 0.940476 | 0.837838 |
 | gpt-4o | tool-calling | axtree | none | 0.059524 | 0.107143 | 0.809524 | 0.571429 |
+
+
+## Running Open-Source Models and Models at Custom OpenAI API-compatible Endpoints
+We provide the option to run models that are hosted on arbitrary endpoints compatible with the OpenAI Responses and Chat Completions APIs. This could be open-source models hosted with [vllm](https://cookbook.openai.com/articles/gpt-oss/run-vllm) or with [ollama](https://cookbook.openai.com/articles/gpt-oss/run-locally-ollama) or the [Gemini OpenAI-compatible API](https://ai.google.dev/gemini-api/docs/openai). To do so, set the `provider` variable to be `openai_custom_chat_completions`/`openai_custom_responses` and provide the `OPENAI_API_BASE_URL` environment variable.
+
+## Adding New Models and Agents
+This requires changes to the codebase under the folder `webarena_prompt_injections`. At a minimum, you need to edit the `run_end_to_end_in_parallel.py`. 
+
+- It is easiest to add models to the existing web-actions-as-tools agent. You just need to modify the functions `map_provider_agent_logs_and_environment_variables_for_tool_calling_agent` and `get_deployment_model_name_and_scaffolding_dir` in `run_end_to_end_in_parallel.py` to add your new model and the text-based web-actions-as-tools agent should just work with the appropraite provider.
+- To add new agents, you need to define your own way of running them as a subprocess and make changes to the `config/config.yml` to provide the necessary mapping between their scaffolding, provider, and deployment/short model name. Then, you need to interpret those config values into settings for your subprocess call. Check out `run_tool_calling_agent_in_subprocess` in `run_end_to_end_in_parallel.py` for an example.
+- We also provide a minimal example of implementing a proof-of-concept standalone API-based email agent that is not integrated into the broader infrastructure under `tool_calling_loop/run_email_agent.py`. 
+
+
+## Supported Model, Provider, and Scaffolding Combinations
+
+WASP supports various combinations of models, API providers, and scaffolding frameworks. The table below shows the available configurations:
+
+### Model-Provider Mapping
+
+| Model Family | Short Model Names | Supported Providers | API Keys Required |
+|-------------|------------------|-------------------|------------------|
+| **Claude** | `claude-35-v2`, `claude-37-thinking`, `claude-4-sonnet` | `bedrock`, `anthropic` | AWS credentials (bedrock) or `ANTHROPIC_API_KEY` (anthropic) |
+| **GPT** | `gpt-4o`, `gpt-4o-mini`, `o1` | `azure_chat_completions`, `openai_chat_completions`, `openai_custom_chat_completions` | Azure credentials or `OPENAI_API_KEY` |
+| **GPT-OSS** | `gpt-oss-20b`, `gpt-oss-120b` | `openai_responses`, `azure_responses`, `openai_custom_responses`, `openai_chat_completions`, `azure_chat_completions`, `openai_custom_chat_completions` | `OPENAI_API_KEY` and `OPENAI_API_BASE_URL` |
+| **Computer Use** | `computer-use-preview` | `azure_responses`, `openai_responses` | Azure credentials or `OPENAI_API_KEY` |
+| **Gemini** | `gemini-*` | `openai_custom_chat_completions` | `OPENAI_API_KEY` |
+
+### Scaffolding-Model Compatibility
+
+| Scaffolding | Compatible Models | Description | Special Features |
+|------------|------------------|-------------|------------------|
+| **curi-35** | `claude-35-v2` | Claude 3.5 Computer Use Reference Implementation | System prompt defenses, Docker-based |
+| **curi-37** | `claude-37-thinking` | Claude 3.7 Computer Use Reference Implementation | System prompt defenses, Docker-based, thinking support |
+| **tool-calling** | All Claude models, All GPT models, GPT-OSS models | Text-based web browser actions as tools | Thinking & interleaved thinking (Claude only) |
+| **visualwebarena-axtree** | All GPT models | VisualWebArena with accessibility tree | System prompt defenses |
+| **visualwebarena-som** | All GPT models | VisualWebArena with Set-of-Marks | System prompt defenses, GPU memory required |
+
+### Provider Configuration Details
+
+#### Claude Models
+- **Bedrock**: Requires `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`
+- **Anthropic**: Requires `ANTHROPIC_API_KEY`
+
+#### GPT Models  
+- **Azure Chat Completions**: Requires `AZURE_API_KEY`, `AZURE_API_ENDPOINT`, `AZURE_API_VERSION`
+- **OpenAI Chat Completions**: Requires `OPENAI_API_KEY`
+
+#### Open-Source Models
+- **OpenAI Custom Chat Completions and Responses**: Requires `OPENAI_API_KEY`, `OPENAI_API_BASE_URL` (this is where your vllm, ollama or other OpenAI-API-compatible server is hosted)
+
+#### Gemini Models
+- Automatically points the `OPENAI_API_BASE_URL` to be `https://generativelanguage.googleapis.com/v1beta/openai/` and interprets the `OPENAI_API_KEY` as a Gemini API key. See [Gemini OpenAI-compatible API](https://ai.google.dev/gemini-api/docs/openai).
+
+#### Special Features by Model
+- **Thinking**: Only available for Claude models with tool-calling scaffolding
+- **Interleaved Thinking**: Only available for Claude models with tool-calling scaffolding
+- **System Prompt Defenses**: Available for Claude models with CURI scaffolding and all models with VisualWebArena scaffolding
+- **Developer System Role**: Only available for `o1` model
+
 
 
 ## What happens during a run?
 At a high level, here is what will happen:
-* Each of the comma-separated `env_ip`'s from the `config/experiment/experiment_name.yaml` will be treated as a deployment that has GitLab on port 8023 and Reddit on port 9999.
+* Instantiated URLs for each site from the sites field in the tasks will be read from the `config/config.yaml` site_urls variable. If there are multiple possible deployments, the code will parallelize execution for tasks requiring the same site across these multiple deployents.
 * Each Reddit and each GitLab task (each dictionary in the JSON list in `configs/example_task_config.json`) will be randomly assigned to one of these deployments. Task ids that have evals in the log folder will be skipped, so that the run can be restarted. 
 * All `setup_fn`'s from your `webarena_prompt_injections/task_configs/example_task_config.json` will be ran upfront sequentially and without parallelization. 
    * Parameters for this function will be taken from the `parameters` field of the json dictionary and any return values of the function. 

@@ -14,13 +14,7 @@ from constants import CLAUDE_WEBARENA_UTILITY_SYSTEM_MESSAGE_ADDENDUM
 
 from omegaconf import DictConfig, OmegaConf
 
-from environment_setup import SETUP_ACTION_NAME_TO_FUNCTION
-from environment_cleanup import CLEANUP_ACTION_NAME_TO_FUNCTION
-from environment_editors.base_environment_editor import BaseWebArenaEditor
-from environment_editors.gitlab_editor import GitlabEditor
-from environment_editors.reddit_editor import RedditEditor
 from webarena_evaluator_utils import OutputFormat
-import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -115,13 +109,18 @@ def create_claude_model_run_command(
         system_prompt_suffix,
         "--max-actions",
         str(max_actions),
-        "--autologin-tool-calls",
-        login_path,
-        "--login-url",
-        login_url,
         "--only-n-most-recent-images",
         str(max_observations_to_keep),
     ]
+
+    if login_path != "":
+        base_claude_command += [
+            "--autologin-tool-calls",
+            login_path,
+            "--login-url",
+            login_url,
+        ]
+
     if short_model_name == "claude-35-v2":
         return base_claude_command
     elif short_model_name == "claude-37-thinking":
@@ -169,25 +168,7 @@ def create_visualwebarena_run_command(
     ]
 
 
-def cleanup_environment_for_tasks(tasks: list[dict]):
-    for task in tasks:
-        if task["sites"][0] == "reddit":
-            editor = RedditEditor(task["env_ip"])
-        elif task["sites"][0] == "gitlab":
-            editor = GitlabEditor(task["env_ip"])
-        else:
-            raise ValueError(f"Unsupported site: {task['sites'][0]}")
-
-        cleanup_fn_name = task["cleanup_fn"]
-        logger.info(
-            f"Running cleanup function {cleanup_fn_name} for task {task['task_id']} on environment {task['env_ip']}"
-        )
-        if cleanup_fn_name:
-            cleanup_fn = CLEANUP_ACTION_NAME_TO_FUNCTION[cleanup_fn_name]
-            cleanup_fn(editor, **task["parameters"])
-
-
-def load_tasks_and_assign_to_environment(tasks, env_deployments, eval_results_folder):
+def load_tasks_and_assign_to_environment(tasks, site_urls, eval_results_folder):
 
     task_ids_to_skip = set()
     # Read the log file and extract task_id and status
@@ -210,31 +191,43 @@ def load_tasks_and_assign_to_environment(tasks, env_deployments, eval_results_fo
         tasks_list = json.load(f)
 
     instantiated_tasks = []
-    available_env_deployments = {ip: True for ip in env_deployments}
+    available_deployments_to_choose_from_per_site = {}
+    for site in site_urls:
+        available_deployments_to_choose_from_per_site[site] = set(site_urls[site])
 
     for task in tasks_list:
-        if (
-            task["task_id"] in task_ids_to_skip
-            or any(site not in ["gitlab", "reddit"] for site in task["sites"])
-            or len(task["sites"]) > 1
-        ):
+        if task["task_id"] in task_ids_to_skip:
+            logger.warning(
+                f"Skipping task {task['task_id']} due to having completed eval status. Please, delete the eval results file {os.path.join(eval_results_folder, f'{task['task_id']}_eval.json')} if you want to re-run the task."
+            )
+
+            continue
+        if any(site not in site_urls.keys() for site in task["sites"]):
+            logger.warning(
+                f"Skipping task {task['task_id']} because it has sites {task['sites']} that are not in the provided site URLs from the config: {site_urls}. Please, update the top-level config/config.yaml file to include the sites in the site_urls section."
+            )
+            continue
+        if len(task["sites"]) > 1:
+            logger.warning(
+                f"Skipping task {task['task_id']} because it has multiple sites {task['sites']}. Currently, only single-site tasks are supported."
+            )
             continue
 
-        deployments_to_choose_from = [
-            ip for ip in available_env_deployments if available_env_deployments[ip]
-        ]
-        if len(deployments_to_choose_from) < 1:
-            available_env_deployments = {ip: True for ip in env_deployments}
-            deployments_to_choose_from = [ip for ip in available_env_deployments]
-        env_ip = random.choice(deployments_to_choose_from)
-        available_env_deployments[env_ip] = False
+        site_of_this_task = task["sites"][0]
 
-        if task["sites"][0] == "reddit":
-            reddit_url = f"http://{env_ip}:9999"
-            task["env_ip"] = reddit_url
-        elif task["sites"][0] == "gitlab":
-            gitlab_url = f"http://{env_ip}:8023"
-            task["env_ip"] = gitlab_url
+        if len(available_deployments_to_choose_from_per_site[site_of_this_task]) < 1:
+            available_deployments_to_choose_from_per_site[site_of_this_task] = set(
+                site_urls[site_of_this_task]
+            )
+
+        url_for_site = random.choice(
+            list(available_deployments_to_choose_from_per_site[site_of_this_task])
+        )
+        available_deployments_to_choose_from_per_site[site_of_this_task].remove(
+            url_for_site
+        )
+
+        task["env_ip"] = url_for_site
 
         logger.info(f"Assigning task {task['task_id']} to environment {task['env_ip']}")
 
@@ -280,17 +273,19 @@ async def run_claude_in_subprocess(
 
     login_url = env_ip
     login_path = ""
-    if env_ip.endswith("9999"):
+    if task["sites"][0] == "reddit":
         login_url += "/login"
         login_path = (
             "/home/computeruse/computer_use_demo/reddit_login_tool_calls_sequence.json"
         )
-    elif env_ip.endswith("8023"):
+    elif task["sites"][0] == "gitlab":
         login_path = (
             "/home/computeruse/computer_use_demo/gitlab_login_tool_calls_sequence.json"
         )
     else:
-        raise ValueError(f"Unable to support auto-login for environment: {env_ip}")
+        logger.warning(
+            f"Auto-login for sites {task['sites']} is not supported. Skipping!"
+        )
 
     docker_command = create_claude_model_run_command(
         short_model_name=short_model_name,
@@ -342,8 +337,8 @@ async def run_tool_calling_agent_in_subprocess(
 
     environment_dict = {
         "DATASET": "webarena",
-        "REDDIT": task["env_ip"],
-        "GITLAB": task["env_ip"],
+        "REDDIT": task["env_ip"].split(":")[0],
+        "GITLAB": task["env_ip"].split(":")[0],
         "HOMEPAGE": "foo",
         "SHOPPING": "foo",
         "SHOPPING_ADMIN": "foo",
@@ -393,8 +388,8 @@ async def run_visualwebarena_in_subprocess(
             "AZURE_API_KEY": os.environ["AZURE_API_KEY"],
             "AZURE_API_VERSION": os.environ["AZURE_API_VERSION"],
             "DATASET": "webarena",
-            "REDDIT": task["env_ip"],
-            "GITLAB": task["env_ip"],
+            "REDDIT": task["env_ip"].split(":")[0],
+            "GITLAB": task["env_ip"].split(":")[0],
             "HOMEPAGE": "foo",
             "SHOPPING": "foo",
             "SHOPPING_ADMIN": "foo",
@@ -485,6 +480,133 @@ async def run_eval_in_subprocess(
     )
 
 
+def map_provider_agent_logs_and_environment_variables_for_tool_calling_agent(
+    cfg: DictConfig, deployment_model_name: str
+):
+    if "claude" in deployment_model_name:
+        provider_config = cfg.model_providers.claude
+        if provider_config == "bedrock":
+            parameters_with_api_key = {
+                "AWS_ACCESS_KEY_ID": os.environ["AWS_ACCESS_KEY_ID"],
+                "AWS_SECRET_ACCESS_KEY": os.environ["AWS_SECRET_ACCESS_KEY"],
+                "AWS_SESSION_TOKEN": os.environ["AWS_SESSION_TOKEN"],
+                "AWS_REGION": os.environ["AWS_REGION"],
+            }
+        elif provider_config == "anthropic":
+            parameters_with_api_key = {
+                "ANTHROPIC_API_KEY": os.environ["ANTHROPIC_API_KEY"],
+            }
+        else:
+            raise ValueError(
+                f"Unsupported provider {provider_config} for model {deployment_model_name} in tool calling agent: {deployment_model_name}"
+            )
+        agent_logs_format = OutputFormat.ANTHROPIC_API_WEB_TOOLS
+
+    elif deployment_model_name in ["gpt-4o", "gpt-4o-mini", "o1"]:
+        provider_config = cfg.model_providers.gpt
+
+        if provider_config == "azure_chat_completions":
+            parameters_with_api_key = {
+                "AZURE_API_KEY": os.environ["AZURE_API_KEY"],
+                "AZURE_API_ENDPOINT": os.environ["AZURE_API_ENDPOINT"],
+                "AZURE_API_VERSION": os.environ["AZURE_API_VERSION"],
+            }
+        elif provider_config == "openai_chat_completions":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+            }
+        elif provider_config == "openai_custom_chat_completions":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+                "OPENAI_API_BASE_URL": os.environ["OPENAI_API_BASE_URL"],
+            }
+        else:
+            raise ValueError(
+                f"Unsupported provider {provider_config} for model {deployment_model_name} in tool calling agent: {deployment_model_name}"
+            )
+
+        agent_logs_format = OutputFormat.GPT_WEB_TOOLS
+
+    elif "gpt-oss" in deployment_model_name:
+        provider_config = cfg.model_providers.oss
+
+        if provider_config == "openai_responses":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+            }
+        elif provider_config == "openai_custom_responses":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+                "OPENAI_API_BASE_URL": os.environ["OPENAI_API_BASE_URL"],
+            }
+        elif provider_config == "azure_responses":
+            parameters_with_api_key = {
+                "AZURE_API_KEY": os.environ["AZURE_API_KEY"],
+                "AZURE_API_ENDPOINT": os.environ["AZURE_API_ENDPOINT"],
+                "AZURE_API_VERSION": os.environ["AZURE_API_VERSION"],
+            }
+        elif provider_config == "openai_chat_completions":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+            }
+        elif provider_config == "azure_chat_completions":
+            parameters_with_api_key = {
+                "AZURE_API_KEY": os.environ["AZURE_API_KEY"],
+                "AZURE_API_ENDPOINT": os.environ["AZURE_API_ENDPOINT"],
+                "AZURE_API_VERSION": os.environ["AZURE_API_VERSION"],
+            }
+        elif provider_config == "openai_custom_chat_completions":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+                "OPENAI_API_BASE_URL": os.environ["OPENAI_API_BASE_URL"],
+            }
+        else:
+            raise ValueError(
+                f"Unsupported provider {provider_config} for model {deployment_model_name} in tool calling agent: {deployment_model_name}"
+            )
+
+        agent_logs_format = OutputFormat.OPENAI_RESPONSES_WEB_TOOLS
+
+    elif deployment_model_name in ["computer-use-preview"]:
+        provider_config = cfg.model_providers.computer_use
+
+        if provider_config == "azure_responses":
+            parameters_with_api_key = {
+                "AZURE_API_KEY": os.environ["AZURE_API_KEY"],
+                "AZURE_API_ENDPOINT": os.environ["AZURE_API_ENDPOINT"],
+                "AZURE_API_VERSION": os.environ["AZURE_API_VERSION"],
+            }
+        elif provider_config == "openai_responses":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+            }
+        else:
+            raise ValueError(
+                f"Unsupported provider {provider_config} for model {deployment_model_name} in tool calling agent: {deployment_model_name}"
+            )
+
+        agent_logs_format = OutputFormat.OPENAI_RESPONSES_WEB_TOOLS
+    elif "gemini" in deployment_model_name:
+        provider_config = cfg.model_providers.gemini
+
+        if provider_config == "openai_custom_chat_completions":
+            parameters_with_api_key = {
+                "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+                "OPENAI_API_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            }
+        else:
+            raise ValueError(
+                f"Unsupported provider {provider_config} for model {deployment_model_name} in tool calling agent: {deployment_model_name}"
+            )
+        agent_logs_format = OutputFormat.GPT_WEB_TOOLS
+    else:
+        raise ValueError(
+            f"Unsupported provider for model in tool calling agent: {deployment_model_name}"
+        )
+
+    return provider_config, parameters_with_api_key, agent_logs_format
+
+
 async def run_agent(
     cfg: DictConfig,
     deployment_model_name: str,
@@ -492,7 +614,7 @@ async def run_agent(
     selected_tasks: list[dict],
     eval_results_folder: str,
     prompt_injection_eval_results_folder: str,
-    env_deployments: list[str],
+    site_urls: list[str],
     actions_log_folder: str,
     tasks_log_folder: str,
 ):
@@ -500,9 +622,9 @@ async def run_agent(
 
     # Dictionary to track environment locks
     env_locks = {
-        f"http://{env_ip}:{port}": asyncio.Lock()
-        for env_ip in env_deployments
-        for port in [9999, 8023]
+        deployment_url: asyncio.Lock()
+        for site in site_urls
+        for deployment_url in site_urls[site]
     }
 
     async def process_task(task):
@@ -558,34 +680,12 @@ async def run_agent(
                                 "Defensive system prompt is not implemented for tool calling agent."
                             )
 
-                        if "claude" in deployment_model_name:
-                            provider = cfg.model_providers.claude
-                            parameters_with_api_key = {
-                                "AWS_ACCESS_KEY_ID": os.environ["AWS_ACCESS_KEY_ID"],
-                                "AWS_SECRET_ACCESS_KEY": os.environ[
-                                    "AWS_SECRET_ACCESS_KEY"
-                                ],
-                                "AWS_SESSION_TOKEN": os.environ["AWS_SESSION_TOKEN"],
-                                "AWS_REGION": os.environ["AWS_REGION"],
-                            }
-                            agent_logs_format = OutputFormat.ANTHROPIC_API_WEB_TOOLS
-
-                        elif (
-                            "gpt" in deployment_model_name
-                            or "o1" in deployment_model_name
-                        ):
-                            provider = cfg.model_providers.gpt
-                            parameters_with_api_key = {
-                                "AZURE_API_KEY": os.environ["AZURE_API_KEY"],
-                                "AZURE_API_ENDPOINT": os.environ["AZURE_API_ENDPOINT"],
-                                "AZURE_API_VERSION": os.environ["AZURE_API_VERSION"],
-                            }
-                            agent_logs_format = OutputFormat.GPT_WEB_TOOLS
-
-                        else:
-                            raise ValueError(
-                                f"Unsupported provider for model in tool calling agent: {deployment_model_name}"
+                        provider, parameters_with_api_key, agent_logs_format = (
+                            map_provider_agent_logs_and_environment_variables_for_tool_calling_agent(
+                                cfg=cfg,
+                                deployment_model_name=deployment_model_name,
                             )
+                        )
 
                         agent_process_returncode, agent_stdout, agent_stderr = (
                             await run_tool_calling_agent_in_subprocess(
@@ -783,7 +883,7 @@ async def run_agent(
             )
 
     logger.info(
-        f"Running {len(selected_tasks)} tasks for model {cfg.experiment.short_model_name} on environments {env_deployments}."
+        f"Running {len(selected_tasks)} tasks for model {cfg.experiment.short_model_name} on environments {site_urls}."
     )
 
     # Create tasks for all model/environment combos
@@ -804,6 +904,14 @@ def get_deployment_model_name_and_scaffolding_dir(cfg):
             deployment_model_name = cfg.deployment_model_name.o1
         case "gpt-4o":
             deployment_model_name = cfg.deployment_model_name.gpt_4o
+        case "gpt-4o-mini":
+            deployment_model_name = cfg.deployment_model_name.gpt_4o_mini
+        case "gpt-oss-20b":
+            deployment_model_name = cfg.deployment_model_name.gpt_oss_20b
+        case "gpt-oss-120b":
+            deployment_model_name = cfg.deployment_model_name.gpt_oss_120b
+        case "computer-use-preview":
+            deployment_model_name = cfg.deployment_model_name.computer_use_preview
         case _:
             raise ValueError(f"Unsupported model: {cfg.experiment.short_model_name}")
 
@@ -880,10 +988,8 @@ def cli(cfg: DictConfig):
     )
     os.makedirs(prompt_injection_eval_results_folder, exist_ok=True)
 
-    env_deployments = cfg.env_deployments
-
     selected_tasks = load_tasks_and_assign_to_environment(
-        cfg.tasks, env_deployments, eval_results_folder
+        cfg.tasks, cfg.site_urls, eval_results_folder
     )
 
     tasks_log_folder = os.path.join(log_dir, "tasks")
@@ -897,7 +1003,7 @@ def cli(cfg: DictConfig):
             selected_tasks=selected_tasks,
             eval_results_folder=eval_results_folder,
             prompt_injection_eval_results_folder=prompt_injection_eval_results_folder,
-            env_deployments=env_deployments,
+            site_urls=cfg.site_urls,
             actions_log_folder=actions_log_folder,
             tasks_log_folder=tasks_log_folder,
         )

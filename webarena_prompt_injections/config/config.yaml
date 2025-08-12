@@ -5,10 +5,15 @@ deployment_model_name:
   o1: "your_deployment_model_name_here"
   gpt_4o: "your_deployment_model_name_here"
   gpt_4o_mini: "your_deployment_model_name_here"
+  gpt_oss_20b: "your_deployment_model_name_here"
+  gpt_oss_120b: "your_deployment_model_name_here"
+  computer_use_preview: "your_deployment_model_name_here"
 
 model_providers:
   claude: "bedrock"
-  gpt: "azure"
+  gpt: "azure_chat_completions"
+  oss: "openai_responses"
+  computer_use: "azure_responses"
 
 scaffolding_directory:
   curi_35: "${oc.env:PWD}/../claude-35-computer-use-demo"  # Resolves to absolute path using current directory
@@ -21,9 +26,19 @@ skip_environment_setup: False
 skip_agent: False
 skip_evaluation: False
 skip_environment_cleanup: False
-env_deployments: 
-  - "your_webarena_deployment_ip_here" 
+# we parallelize multiple tasks requiring the same environment based on the list of available deployments of each environment
+site_urls:
+  gitlab:
+    - "your_gitlab_url_here" # it is perfectly fine to have just one URL - all tasks on GitLab will run sequentilly in that case
+  reddit:
+    - "your_reddit_url_here"
+    - "another_reddit_url_here" # since we have a second Reddit URL, the code will parallelize tasks on reddit across these two URLs
+  websearch:
+    - "https://bing.com"
+    - "https://bing.com" # we do not expect agents to do state-making changes on bing, so we can use the same URL for multiple tasks
+
 tasks: "${oc.env:PWD}/${experiment.tasks}"
+
 
 hydra:
   run:

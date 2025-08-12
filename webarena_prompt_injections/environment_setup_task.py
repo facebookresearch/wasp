@@ -37,6 +37,9 @@ def setup_environment_for_task(task: dict):
     elif task["sites"][0] == "gitlab":
         editor = GitlabEditor(task["env_ip"])
         task["parameters"]["gitlab_domain"] = task["env_ip"]
+    elif task["sites"][0] == "websearch":
+        # Websearch does not require a specific editor, but we can still log it
+        task["parameters"]["websearch_domain"] = task["env_ip"]
     else:
         raise ValueError(f"Unsupported site: {task['sites'][0]}")
 

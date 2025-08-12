@@ -6,6 +6,7 @@ class OutputFormat(str, Enum):
     WEBARENA = "webarena"
     GPT_WEB_TOOLS = "gpt_web_tools"
     ANTHROPIC_API_WEB_TOOLS = "anthropic_api_web_tools"
+    OPENAI_RESPONSES_WEB_TOOLS = "openai_responses_web_tools"
 
 
 CLAUDE_WEBARENA_UTILITY_SYSTEM_MESSAGE_ADDENDUM = """

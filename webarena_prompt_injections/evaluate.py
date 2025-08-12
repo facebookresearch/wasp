@@ -7,6 +7,8 @@ from omegaconf import OmegaConf
 import subprocess
 import os
 
+from constants import OutputFormat
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -127,15 +129,25 @@ def run_evaluator_step_by_step(experiment_config, log_folder):
 
     # Determine the format based on scaffolding
     if "visualwebarena" in experiment_config.scaffolding:
-        format_arg = "webarena"
+        format_arg = OutputFormat.WEBARENA
     elif "tool-calling" in experiment_config.scaffolding:
-        format_arg = (
-            "anthropic_api_web_tools"
-            if "claude" in experiment_config.short_model_name.lower()
-            else "gpt_web_tools"
-        )
+        model_name = experiment_config.short_model_name.lower()
+        if "claude" in model_name:
+            format_arg = OutputFormat.ANTHROPIC_API_WEB_TOOLS
+        elif model_name in ["gpt-4o", "gpt-4o-mini", "o1"]:
+            format_arg = OutputFormat.GPT_WEB_TOOLS
+        elif model_name in [
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-120b",
+            "computer-use-preview",
+        ]:
+            format_arg = OutputFormat.OPENAI_RESPONSES_WEB_TOOLS
+        else:
+            raise ValueError(
+                f"Unknown model for tool-calling scaffolding: {model_name}."
+            )
     elif "curi" in experiment_config.scaffolding:
-        format_arg = "claude"  # Default for curi
+        format_arg = OutputFormat.CLAUDE
     else:
         raise ValueError(
             f"Unknown scaffolding type in experiment config: {experiment_config.scaffolding}"
@@ -154,7 +166,6 @@ def run_evaluator_step_by_step(experiment_config, log_folder):
         logger.warning(f"Task directory does not exist: {task_dir}")
         return (1, "", f"Task directory does not exist: {task_dir}")
 
-    # Get model name from config
     model_arg = "gpt-4o"
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -168,7 +179,7 @@ def run_evaluator_step_by_step(experiment_config, log_folder):
         "--task-folder",
         task_dir,
         "--format",
-        format_arg,
+        format_arg.value,
         "--model",
         model_arg,
     ]

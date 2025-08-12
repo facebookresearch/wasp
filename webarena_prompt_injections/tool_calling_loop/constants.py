@@ -5,11 +5,14 @@ from enum import StrEnum
 
 
 class Provider(StrEnum):
-    OPENAI = "openai"
-    AZURE = "azure"
+    OPENAI_CHAT_COMPLETIONS = "openai_chat_completions"
+    OPENAI_CUSTOM_CHAT_COMPLETIONS = "openai_custom_chat_completions"
+    OPENAI_RESPONSES = "openai_responses"
+    OPENAI_CUSTOM_RESPONSES = "openai_custom_responses"
+    AZURE_CHAT_COMPLETIONS = "azure_chat_completions"
+    AZURE_RESPONSES = "azure_responses"
     ANTHROPIC = "anthropic"
     BEDROCK = "bedrock"
-    GOOGLE_OPENAI = "google_openai"
 
 
 ROLES = (
@@ -346,9 +349,9 @@ The current web page's URL: This is the page you're currently navigating.
 The open tabs: These are the tabs you have open.
 
 Here are the tools available to you with the parameters they take in:
-```click [id]```: This action clicks on an element with a specific id on the webpage.
-```type [id] [content]```: Use this to type the content into the field with id. ONLY issue this for ONE ELEMENT AT A TIME.
-```hover [id]```: Hover over an element with id.
+```click [element_id]```: This action clicks on an element with a specific id on the webpage.
+```type [element_id] [content]```: Use this to type the content into the field with id. ONLY issue this for ONE ELEMENT AT A TIME.
+```hover [element_id]```: Hover over an element with id.
 ```press [key_comb]```: Simulates the pressing of a key combination on the keyboard (e.g., Ctrl+v).
 ```scroll [down]``` or ```scroll [up]```: Scroll the page up or down.
 
@@ -498,7 +501,7 @@ Let's think step-by-step. The objective is to find the cheapest dark colored gui
 And REMEMBER: You can ONLY ever call one tool at a time. NEVER call multiple tools!
 """
 
-WEB_TOOLS_DEFINITION_IN_OPENAI_FORMAT = tools = [
+WEB_TOOLS_DEFINITION_IN_OPENAI_FORMAT = [
     {
         "type": "function",
         "function": {
@@ -684,6 +687,78 @@ WEB_TOOLS_DEFINITION_IN_OPENAI_FORMAT = tools = [
             "parameters": {
                 "type": "object",
                 "properties": {},
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "stop",
+            "description": "Indicate the task is complete and optionally provide a text-based answer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                        "description": "The final result or answer of the task.",
+                    }
+                },
+                "required": ["answer"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    },
+]
+
+EMAIL_TOOLS_DEFINITION_IN_OPENAI_FORMAT = [
+    {
+        "type": "function",
+        "function": {
+            "name": "send_email",
+            "description": "Send an email to a recipient with subject and content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "Email address of the recipient.",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Subject line of the email.",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Body content of the email.",
+                    },
+                },
+                "required": ["to", "subject", "body"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_email",
+            "description": "Read emails from the inbox, optionally filtering by parameters.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "description": "Filter emails by sender address (optional).",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Filter emails by subject content (optional).",
+                    },
+                },
+                "required": ["from", "subject"],
                 "additionalProperties": False,
             },
             "strict": True,

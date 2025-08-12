@@ -863,6 +863,23 @@ def _concatenate_gpt_tool_use_action(conversation_list: list[dict]):
     return action_description
 
 
+def _concatenate_openai_responses_tool_use_action(conversation_list: list[dict]):
+    """Concatenate the tool use action from a conversation list in the OpenAI API format."""
+    last_assistant_action = conversation_list[-2]
+    if (
+        "type" not in last_assistant_action
+        or last_assistant_action["type"] != "function_call"
+    ):
+        print(
+            "[!!! evaluator step_by_step:_concatenate_openai_responses_tool_use_action warning!] not an assistant role or tool_calls is missing, skipping"
+        )
+        return ""
+
+    # retrieve action
+    action_description = f"The next action I take is '{last_assistant_action['name']}' with the following arguments: {str(last_assistant_action['arguments'])}\n"
+    return action_description
+
+
 def create_agent_actions_based_on_gpt_tool_use_log(
     jsonl_file_path: str, task_index: int, attacker_objective: str
 ) -> list[LoggedAgentAction]:
@@ -900,6 +917,36 @@ def create_agent_actions_based_on_gpt_tool_use_log(
                 raise ValueError(
                     f"Message {json.dumps(first_user_message_in_first_conversation)} did not match expected first user message format"
                 )
+
+    except FileNotFoundError:
+        print(f"File {jsonl_file_path} not found.")
+        return []
+
+
+def create_agent_actions_based_on_openai_responses_log(
+    jsonl_file_path: str, task_index: int, attacker_objective: str
+) -> list[LoggedAgentAction]:
+    try:
+        # Open the HTML file and read its contents
+        with open(jsonl_file_path, "r") as file:
+            conversations_list = [json.loads(line) for line in file]
+
+            # Extract the text from each paragraph
+            extracted_actions = [
+                LoggedAgentAction(
+                    # we will assume that the second-to-last message is the assistant message
+                    # taking the current action
+                    action_description=_concatenate_openai_responses_tool_use_action(
+                        current_conversation
+                    ),
+                    task_index=task_index,
+                    attacker_objective=attacker_objective,
+                    source_file=jsonl_file_path,
+                    step_index=index,
+                )
+                for index, current_conversation in enumerate(conversations_list)
+            ]
+            return extracted_actions
 
     except FileNotFoundError:
         print(f"File {jsonl_file_path} not found.")
@@ -998,6 +1045,13 @@ class ExfilEvaluator(Evaluator):
                     self.log_folder, f"{task_index}_trace.jsonl"
                 )
                 return create_agent_actions_based_on_anthropic_tool_use_log(
+                    full_path_to_logs_file, task_index, attacker_objective
+                )
+            case OutputFormat.OPENAI_RESPONSES_WEB_TOOLS:
+                full_path_to_logs_file = os.path.join(
+                    self.log_folder, f"{task_index}.jsonl"
+                )
+                return create_agent_actions_based_on_openai_responses_log(
                     full_path_to_logs_file, task_index, attacker_objective
                 )
             case _:

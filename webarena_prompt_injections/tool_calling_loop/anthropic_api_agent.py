@@ -8,11 +8,15 @@ from anthropic.types.beta import (
     BetaToolUnionParam,
 )
 
-from base_agent import BaseWebAgent
-from constants import Provider, WEB_TOOLS_DEFINITION_IN_OPENAI_FORMAT
+from base_agent import BaseToolCallingAgent, WebAgentMixin, EmailMixin
+from constants import (
+    Provider,
+    WEB_TOOLS_DEFINITION_IN_OPENAI_FORMAT,
+    EMAIL_TOOLS_DEFINITION_IN_OPENAI_FORMAT,
+)
 
 
-class AnthropicAPIWebAgent(BaseWebAgent):
+class AnthropicAPIGenericToolCallingAgent(BaseToolCallingAgent):
     def __init__(
         self,
         model: str,
@@ -58,11 +62,6 @@ class AnthropicAPIWebAgent(BaseWebAgent):
         else:
             self.extra_headers_parameter_for_model_call = {}
 
-        # Convert OpenAI tool definitions to Anthropic format
-        self.tools_definitions = self._convert_to_anthropic_tool_format(
-            WEB_TOOLS_DEFINITION_IN_OPENAI_FORMAT
-        )
-
     def _convert_to_anthropic_tool_format(self, openai_tools):
         """Convert OpenAI tool definitions to Anthropic format."""
         anthropic_tools: List[BetaToolUnionParam] = []
@@ -101,15 +100,6 @@ class AnthropicAPIWebAgent(BaseWebAgent):
                 system=self.system_prompt,
             )
 
-        print(f"Received model response from {self.provider} API.", file=sys.stderr)
-        for block in response.content:
-            if block.type == "text":
-                print(f"Text response: {block.text[:100]}...", file=sys.stderr)
-            elif block.type == "thinking":
-                print(f"Thinking: {block.thinking}", file=sys.stderr)
-            elif block.type == "tool_use":
-                print(f"Tool call: {block.name}", file=sys.stderr)
-
         return self._parse_model_response(response)
 
     def _create_user_message(self, content):
@@ -119,11 +109,11 @@ class AnthropicAPIWebAgent(BaseWebAgent):
             "content": content,
         }
 
-    def _create_tool_message(self, tool_call_id, content):
+    def _create_tool_message(self, tool_call, content):
         """Create a tool message with the given ID and content."""
         return {
             "type": "tool_result",
-            "tool_use_id": tool_call_id,
+            "tool_use_id": tool_call["id"],
             "content": content,
         }
 
@@ -139,7 +129,7 @@ class AnthropicAPIWebAgent(BaseWebAgent):
         return tool_use_message["name"]
 
     def _get_tool_arguments(self, tool_use_message: dict) -> dict:
-        return json.dumps(tool_use_message["input"])
+        return tool_use_message["input"]
 
     def _extract_tool_calls(self, response_message: dict) -> list[dict]:
         return [
@@ -168,6 +158,8 @@ class AnthropicAPIWebAgent(BaseWebAgent):
         # Extract text content and tool use blocks
         for content_block in response_message.content:
             if content_block.type == "text":
+                print(f"Text response: {content_block.text}\n", file=sys.stderr)
+
                 parsed_message["content"].append(
                     {
                         "type": "text",
@@ -175,6 +167,11 @@ class AnthropicAPIWebAgent(BaseWebAgent):
                     }
                 )
             elif content_block.type == "tool_use":
+                print(
+                    f"Tool call: {content_block.name} {content_block.input}\n",
+                    file=sys.stderr,
+                )
+
                 tool_call = {
                     "type": "tool_use",
                     "id": content_block.id,
@@ -183,6 +180,8 @@ class AnthropicAPIWebAgent(BaseWebAgent):
                 }
                 parsed_message["content"].append(tool_call)
             elif content_block.type == "thinking":
+                print(f"Thinking: {content_block.thinking}\n", file=sys.stderr)
+
                 parsed_message["content"].append(
                     {
                         "type": "thinking",
@@ -191,6 +190,8 @@ class AnthropicAPIWebAgent(BaseWebAgent):
                     }
                 )
             elif content_block.type == "redacted_thinking":
+                print(f"Thinking: [redacted by API]\n", file=sys.stderr)
+
                 parsed_message["content"].append(
                     {
                         "type": "redacted_thinking",
@@ -237,3 +238,55 @@ class AnthropicAPIWebAgent(BaseWebAgent):
 
         for index_to_remove in sorted(indices_of_removal, reverse=True):
             messages.pop(index_to_remove)
+
+
+class AnthropicAPIWebAgent(AnthropicAPIGenericToolCallingAgent, WebAgentMixin):
+    def __init__(
+        self,
+        model: str,
+        system_prompt: str,
+        filepath_to_trace_log: str,
+        provider: Provider,
+        enable_thinking: bool = False,
+        thinking_budget_tokens: int = 10000,
+        enable_interleaved_thinking: bool = False,
+    ):
+        super().__init__(
+            model=model,
+            system_prompt=system_prompt,
+            filepath_to_trace_log=filepath_to_trace_log,
+            provider=provider,
+            enable_thinking=enable_thinking,
+            thinking_budget_tokens=thinking_budget_tokens,
+            enable_interleaved_thinking=enable_interleaved_thinking,
+        )
+
+        self.tools_definitions = self._convert_to_anthropic_tool_format(
+            WEB_TOOLS_DEFINITION_IN_OPENAI_FORMAT
+        )
+
+
+class AnthropicEmailAgent(AnthropicAPIGenericToolCallingAgent, EmailMixin):
+    def __init__(
+        self,
+        model: str,
+        system_prompt: str,
+        filepath_to_trace_log: str,
+        provider: Provider,
+        enable_thinking: bool = False,
+        thinking_budget_tokens: int = 10000,
+        enable_interleaved_thinking: bool = False,
+    ):
+        super().__init__(
+            model=model,
+            system_prompt=system_prompt,
+            filepath_to_trace_log=filepath_to_trace_log,
+            provider=provider,
+            enable_thinking=enable_thinking,
+            thinking_budget_tokens=thinking_budget_tokens,
+            enable_interleaved_thinking=enable_interleaved_thinking,
+        )
+
+        self.tools_definitions = self._convert_to_anthropic_tool_format(
+            EMAIL_TOOLS_DEFINITION_IN_OPENAI_FORMAT
+        )

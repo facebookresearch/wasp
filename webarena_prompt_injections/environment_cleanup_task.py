@@ -27,7 +27,8 @@ def cleanup_environment_for_task(task: dict):
     elif task["sites"][0] == "gitlab":
         editor = GitlabEditor(task["env_ip"])
     else:
-        raise ValueError(f"Unsupported site: {task['sites'][0]}")
+        print("Unsupported site type for cleanup:", task["sites"], file=sys.stderr)
+        return False
 
     cleanup_fn_name = task["cleanup_fn"]
     logger.info(
@@ -71,7 +72,9 @@ def main():
             sys.exit(1)
 
     except Exception as e:
-        logger.error(f"Error cleaning up environment: {str(e)}\n{traceback.format_exc()}")
+        logger.error(
+            f"Error cleaning up environment: {str(e)}\n{traceback.format_exc()}"
+        )
         sys.exit(1)
 
 
