@@ -1,10 +1,9 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import asyncio
 import os
 import json
 import subprocess
-import aiofiles
 import random
-from dataclasses import dataclass
 import logging
 import hydra
 

@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 """
 Browser Env action space.
 Inspited by Farama-Foundation/miniwob-plusplus

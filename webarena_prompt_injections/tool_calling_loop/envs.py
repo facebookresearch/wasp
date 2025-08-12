@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
