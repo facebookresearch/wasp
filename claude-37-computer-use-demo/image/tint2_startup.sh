@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "starting tint2 on display :$DISPLAY_NUM ..."
+echo "starting tint2 on display :$DISPLAY_NUM ..." >&2
 
 # Start tint2 and capture its stderr
 tint2 -c $HOME/.config/tint2/tint2rc 2>/tmp/tint2_stderr.log &

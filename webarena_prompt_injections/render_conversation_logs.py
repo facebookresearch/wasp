@@ -11,6 +11,7 @@ class ConnversationLogFormat(str, Enum):
     NOT_SELECTED = "Select conversation format"
     GPT = "gpt"
     CLAUDE = "claude"
+    OPENAI_RESPONSES = "openai_responses"
 
 
 # Load the JSONL file and retrieve a specific line
@@ -45,7 +46,7 @@ def decode_base64_image(encoded_string):
 
 # Display the messages with appropriate formatting
 def display_gpt_messages(messages):
-    for message in messages:
+    def _display_single_message(message):
         role = message.get("role", "unknown").capitalize()
         content = message.get("content", "")
 
@@ -88,9 +89,14 @@ def display_gpt_messages(messages):
                     # Standard rendering for other messages
                     st.write(f"Fallback **{role}**: {content}", unsafe_allow_html=True)
 
+    _display_single_message(messages[1])
+    for message in messages[-2:]:
+        _display_single_message(message)
+
 
 def display_claude_messages(messages):
-    for message in messages:
+
+    def _display_single_message(message):
         role = message.get("role", "unknown").capitalize()
         content = message.get("content", "")
 
@@ -121,17 +127,107 @@ def display_claude_messages(messages):
                                 }
                             )
                             st.write("**Rendered Content of Tool Result**:")
-                            for content_item_in_tool_result in content_item["content"]:
-                                if content_item_in_tool_result["type"] == "image":
-                                    image_data = content_item_in_tool_result["source"][
-                                        "data"
-                                    ]
-                                    image_bytes = decode_base64_image(image_data)
-                                    if image_bytes:
-                                        st.image(image_bytes)
-                                else:
-                                    st.write(content_item_in_tool_result)
+                            if isinstance(content_item["content"], str):
+                                st.write(content_item["content"])
+                            else:
+                                for content_item_in_tool_result in content_item[
+                                    "content"
+                                ]:
+                                    if content_item_in_tool_result["type"] == "image":
+                                        image_data = content_item_in_tool_result[
+                                            "source"
+                                        ]["data"]
+                                        image_bytes = decode_base64_image(image_data)
+                                        if image_bytes:
+                                            st.image(image_bytes)
+                                    else:
+                                        st.write(content_item_in_tool_result)
 
+    _display_single_message(messages[1])
+    for message in messages[-2:]:
+        _display_single_message(message)
+
+
+def display_openai_responses_messages(messages):
+    """Display messages from OpenAI Responses API format where each line contains a complete conversation."""
+    
+    def _display_single_message(message):
+        # Handle different message types
+        if "role" not in message:
+            message_type = message.get("type", "unknown")
+            
+            with st.expander(f"{message_type.replace('_', ' ').title()}"):
+                match message_type:
+                    case "function_call":
+                        st.write("**Function Call**")
+                        st.write(f"**ID:** {message.get('id', 'N/A')}")
+                        st.write(f"**Call ID:** {message.get('call_id', 'N/A')}")
+                        st.write(f"**Name:** {message.get('name', 'N/A')}")
+                        if "arguments" in message:
+                            st.write("**Arguments:**")
+                            try:
+                                args = json.loads(message["arguments"])
+                                st.json(args)
+                            except json.JSONDecodeError:
+                                st.code(message["arguments"])
+                    
+                    case "function_call_output":
+                        st.write("**Function Call Output**")
+                        st.write(f"**Call ID:** {message.get('call_id', 'N/A')}")
+                        output = message.get('output', '')
+                        if output.startswith('ERROR:'):
+                            st.error("**Error:**")
+                            st.code(output)
+                        else:
+                            st.write("**Output:**")
+                            st.code(output)
+                    
+                    case _:
+                        st.write("**Unknown Message Type:**")
+                        st.write(message)
+        else:
+            # Handle standard OpenAI message format
+            role = message.get("role", "unknown").capitalize()
+            content = message.get("content", "")
+            
+            with st.expander(f"{role}"):
+                match role:
+                    case "System":
+                        st.write("**System Message:**")
+                        st.write(content)
+                    
+                    case "User":
+                        st.write("**User Message:**")
+                        st.write(content)
+                    
+                    case "Assistant":
+                        if content:
+                            st.write("**Assistant Response:**")
+                            st.write(content)
+                    
+                    case _:
+                        st.write(f"**{role} Message:**")
+                        st.write(content)
+
+    # Display the system and user messages first
+    for message in messages[:2]:
+        _display_single_message(message)
+    
+    messages_to_display = []
+    has_seen_function_output = False
+    for message in messages[::-1]:
+        if "type" in message and message["type"] == "function_call_output":
+            if has_seen_function_output:
+                break
+            has_seen_function_output = True
+        if "role" in message and message["role"] == "user":
+            # Stop displaying messages after the user message
+            break
+    
+        messages_to_display.append(message)
+    
+    for message in messages_to_display[::-1]:
+        _display_single_message(message)
 
 def reset_format_selection():
     st.session_state.should_render_format_selection = True
@@ -143,7 +239,18 @@ def main():
 
     st.session_state.should_render_format_selection = True
     # Define the root directory for your files
-    root_dir = "path_to_the_folder_with_agent_logs"
+    root_dir = "your_logs_directory"  # Change this to your actual logs directory
+    subdirs = os.listdir(root_dir)
+
+    # Create a dropdown menu to select a subdirectory
+    selected_subdir = st.selectbox(
+        "Select a subdirectory",
+        options=subdirs,
+        format_func=lambda x: x,  # Display the subdirectory name
+    )
+
+    # Update the root directory to the selected subdirectory
+    root_dir = os.path.join(root_dir, selected_subdir, "agent_logs")
     # Get a list of all JSONL files in the directory and its subdirectories
     jsonl_files = []
     for root, dirs, files in os.walk(root_dir):
@@ -174,7 +281,7 @@ def main():
         return
 
     # Select a conversation
-    selected_line = st.number_input(
+    selected_line = st.slider(
         "Select conversation line number",
         min_value=0,
         max_value=total_lines - 1,
@@ -189,6 +296,7 @@ def main():
             ConnversationLogFormat.NOT_SELECTED,
             ConnversationLogFormat.GPT,
             ConnversationLogFormat.CLAUDE,
+            ConnversationLogFormat.OPENAI_RESPONSES,
         ],
     )
 
@@ -199,6 +307,8 @@ def main():
             display_gpt_messages(conversation)
         case ConnversationLogFormat.CLAUDE:
             display_claude_messages(conversation)
+        case ConnversationLogFormat.OPENAI_RESPONSES:
+            display_openai_responses_messages(conversation)
 
 
 if __name__ == "__main__":

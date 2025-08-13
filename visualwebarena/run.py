@@ -11,6 +11,7 @@ import logging
 import os
 import random
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -36,12 +37,13 @@ from browser_env import (
     create_stop_action,
 )
 from browser_env.actions import is_equivalent
-from browser_env.auto_login import get_site_comb_from_filepath
 from browser_env.helper_functions import (
     RenderHelper,
     get_action_description,
 )
 from evaluation_harness import evaluator_router, image_utils
+from browser_env.env_config import ACCOUNTS
+
 
 DATASET = os.environ["DATASET"]
 
@@ -64,6 +66,28 @@ logger.addHandler(file_handler)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 console_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
+
+
+def login_to_gitlab(env, env_ip):
+    page = env.page
+    username = ACCOUNTS["gitlab"]["username"]
+    password = ACCOUNTS["gitlab"]["password"]
+    page.goto(f"{env_ip}/users/sign_in")
+    page.get_by_test_id("username-field").click()
+    page.get_by_test_id("username-field").fill(username)
+    page.get_by_test_id("username-field").press("Tab")
+    page.get_by_test_id("password-field").fill(password)
+    page.get_by_test_id("sign-in-button").click()
+
+
+def login_to_reddit(env, env_ip):
+    page = env.page
+    username = ACCOUNTS["reddit"]["username"]
+    password = ACCOUNTS["reddit"]["password"]
+    page.goto(f"{env_ip}/login")
+    page.get_by_label("Username").fill(username)
+    page.get_by_label("Password").fill(password)
+    page.get_by_role("button", name="Log in").click()
 
 
 def config() -> argparse.Namespace:
@@ -242,7 +266,7 @@ def early_stop(
 
 
 def test(args: argparse.Namespace, config_file_list: list[str]) -> None:
-    print(f"Going through these config files: {config_file_list}")
+    print(f"Going through these config files: {config_file_list}", file=sys.stderr)
     scores = []
     max_steps = args.max_steps
 
@@ -309,6 +333,8 @@ def test(args: argparse.Namespace, config_file_list: list[str]) -> None:
         captioning_fn=caption_image_fn,
     )
 
+    last_url = ""
+    answer = ""
     for config_file in config_file_list:
         try:
             render_helper = RenderHelper(
@@ -324,29 +350,6 @@ def test(args: argparse.Namespace, config_file_list: list[str]) -> None:
                 image_paths = _c.get("image", None)
                 prompt_injection = _c.get("prompt_injection", "")
                 images = []
-
-                # automatically login
-                if _c["storage_state"]:
-                    cookie_file_name = os.path.basename(_c["storage_state"])
-                    comb = get_site_comb_from_filepath(cookie_file_name)
-                    temp_dir = tempfile.mkdtemp()
-                    # subprocess to renew the cookie
-                    subprocess.run(
-                        [
-                            "python",
-                            "browser_env/auto_login.py",
-                            "--auth_folder",
-                            temp_dir,
-                            "--site_list",
-                            *comb,
-                        ]
-                    )
-                    _c["storage_state"] = f"{temp_dir}/{cookie_file_name}"
-                    assert os.path.exists(_c["storage_state"])
-                    # update the config file
-                    config_file = f"{temp_dir}/{os.path.basename(config_file)}"
-                    with open(config_file, "w") as f:
-                        json.dump(_c, f)
 
                 # Load input images for the task, if any.
                 if image_paths is not None:
@@ -374,6 +377,22 @@ def test(args: argparse.Namespace, config_file_list: list[str]) -> None:
             agent.reset(config_file)
             trajectory: Trajectory = []
             obs, info = env.reset(options={"config_file": config_file})
+
+            if "gitlab" in _c["sites"]:
+                print(
+                    f"Automatically logging into GitLab: {_c['env_ip']}",
+                    file=sys.stderr,
+                )
+                login_to_gitlab(env, _c["env_ip"])
+            if "reddit" in _c["sites"]:
+                print(
+                    f"Automatically logging into Reddit: {_c['env_ip']}",
+                    file=sys.stderr,
+                )
+                login_to_reddit(env, _c["env_ip"])
+            env.page.goto(_c["start_url"])
+            # Add the initial observation to the trajectory.
+            obs = env._get_obs()
             state_info: StateInfo = {"observation": obs, "info": info}
             trajectory.append(state_info)
 
@@ -447,22 +466,39 @@ def test(args: argparse.Namespace, config_file_list: list[str]) -> None:
                 env.save_trace(Path(args.result_dir) / "traces" / f"{task_id}.zip")
         except openai.OpenAIError as e:
             logger.info(f"[OpenAI Error] {repr(e)}")
-        # except Exception as e:
-        #     logger.info(f"[Unhandled Error] {repr(e)}]")
-        #     import traceback
+            print(f"[OpenAI Error] {repr(e)}", file=sys.stderr)
+        except Exception as e:
+            logger.info(f"[Unhandled Error] {repr(e)}]")
+            print(f"[Unhandled Error] {repr(e)}]", file=sys.stderr)
+            import traceback
 
-        #     # write to error file
-        #     with open(Path(args.result_dir) / "error.txt", "a") as f:
-        #         f.write(f"[Config file]: {config_file}\n")
-        #         f.write(f"[Unhandled Error] {repr(e)}\n")
-        #         f.write(traceback.format_exc())  # write stack trace to file
+            # write to error file
+            with open(Path(args.result_dir) / "error.txt", "a") as f:
+                f.write(f"[Config file]: {config_file}\n")
+                f.write(f"[Unhandled Error] {repr(e)}\n")
+                f.write(traceback.format_exc())  # write stack trace to file
 
+            print(traceback.format_exc(), file=sys.stderr)
+
+        last_url = env.page.url
+        answer = (
+            trajectory[-1]["answer"]
+            if len(trajectory) > 0 and trajectory[-1]["action_type"] == ActionTypes.STOP
+            else ""
+        )
         render_helper.close()
         conversation_renderer.close()
 
     env.close()
     if len(scores):
         logger.info(f"Average score: {sum(scores) / len(scores)}")
+
+    # for compatibility with the parallel script evaluator
+    print()
+    json.dump(
+        {"last_url": last_url, "answer": answer},
+        fp=sys.stdout,
+    )
 
 
 def prepare(args: argparse.Namespace) -> None:
@@ -480,8 +516,7 @@ def prepare(args: argparse.Namespace) -> None:
         args.result_dir = result_dir
         logger.info(f"Create result dir: {result_dir}")
 
-    if not (Path(result_dir) / "traces").exists():
-        (Path(result_dir) / "traces").mkdir(parents=True)
+    (Path(result_dir) / "traces").mkdir(parents=True, exist_ok=True)
 
     # log the log file
     with open(os.path.join(result_dir, "log_files.txt"), "a+") as f:

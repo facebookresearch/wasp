@@ -9,6 +9,7 @@ from computer_use_demo.loop import sampling_loop
 from anthropic.types.beta import BetaContentBlockParam, BetaTextBlockParam
 from computer_use_demo.tools import ToolResult
 import httpx
+import sys
 
 
 class Sender(StrEnum):
@@ -53,7 +54,8 @@ class APIRequestsLogger:
                     if member["type"] == "text":
                         latest_response_first_text = member["text"]
                 print(
-                    f"[Model response number {self.turn}] {latest_response_first_text}"
+                    f"[Model response number {self.turn}] {latest_response_first_text}",
+                    file=sys.stderr,
                 )
                 self.turn += 1
 
@@ -91,6 +93,18 @@ def load_json_file(config_file_path: str):
     help="The model to run that will back the agent",
 )
 @click.option(
+    "--autologin-tool-calls",
+    type=click.Path(),
+    default="",
+    help="Optional path to a file for autologin tool calls",
+)
+@click.option(
+    "--login-url",
+    type=str,
+    default="",
+    help="The URL to log in to, if using the autologin tool calls",
+)
+@click.option(
     "--system-prompt-suffix",
     default="",
     help="A suffix to add to the defaul system prompt",
@@ -104,10 +118,23 @@ def main(
     user_prompt: str,
     conversation_log_file_path: str,
     max_actions: int,
+    autologin_tool_calls: str,
+    login_url,
     system_prompt_suffix: str,
     model: str,
     only_n_most_recent_images: int,
 ):
+    logged_login_tool_calls_sequence = []
+    if autologin_tool_calls:
+        with open(autologin_tool_calls, "r") as f:
+            logged_login_tool_calls_sequence = json.loads(f.read())
+        print(
+            f"Will attempt automatic log-in at {login_url} from logged actions at {autologin_tool_calls}",
+            file=sys.stderr,
+        )
+        assert (
+            login_url != ""
+        ), "You must provide a login URL if you are using autologin tool calls"
 
     initial_messages = [
         {
@@ -118,7 +145,7 @@ def main(
 
     api_requests_accumulator = APIRequestsLogger(conversation_log_file_path)
 
-    asyncio.run(
+    final_messages = asyncio.run(
         sampling_loop(
             system_prompt_suffix=system_prompt_suffix,
             model=model,
@@ -130,10 +157,13 @@ def main(
             api_key="",
             only_n_most_recent_images=only_n_most_recent_images,
             max_actions=max_actions,
+            autologin_tool_calls_sequence=logged_login_tool_calls_sequence,
+            login_url=login_url,
         )
     )
 
-try:
-    main()
-except Exception as e:
-    print(f"[!!! Error] An error occurred: {e}. Proceeding to the next task.")
+    with open(api_requests_accumulator.file_path_to_write_to, "a") as f:
+        f.write(json.dumps(final_messages) + "\n")
+
+
+main()

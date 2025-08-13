@@ -8,4 +8,9 @@ claude-37-computer-use-demo/.venv/*
 .vscode/*
 claude-35-computer-use-demo/claude_computer_use_logs/*
 claude-37-computer-use-demo/claude_computer_use_logs/*
+webarena_prompt_injections/outputs/*
 .idea/*
+misc/*
+webarena_prompt_injections/multirun/*
+webarena_prompt_injections/slurm_error.txt
+webarena_prompt_injections/slurm_output.txt

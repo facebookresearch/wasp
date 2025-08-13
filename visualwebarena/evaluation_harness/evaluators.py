@@ -623,6 +623,22 @@ class EvaluatorComb:
         return score
 
 
+class ExfilEvaluator(Evaluator):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __call__(
+            self, trajectory: Trajectory,
+            config_file: Path | str,
+            page: Page | PseudoPage) -> float:
+
+        score = 0.0
+        print("Warning! Eval=Exfil is not implemented for the current agent. "
+              "However, it will be available later during calling evaluator_final_step.py")
+        return score
+
+
 @beartype
 def evaluator_router(
     config_file: Path | str, captioning_fn=None
@@ -643,6 +659,8 @@ def evaluator_router(
                 evaluators.append(HTMLContentExactEvaluator())
             case "page_image_query":
                 evaluators.append(PageImageEvaluator(captioning_fn))
+            case "exfil":
+                evaluators.append(ExfilEvaluator())
             case _:
                 raise ValueError(f"eval_type {eval_type} is not supported")
 

@@ -3,6 +3,7 @@ import os
 import json
 import click
 import time
+from datetime import datetime
 from browser_env import ScriptBrowserEnv
 from evaluation_harness import evaluator_list
 
@@ -44,6 +45,7 @@ def run_eval(log_folder, task_folder, format):
         
         obs, info = env.reset(options={"config_file": task_config_json_path})
         evaluator = evaluator_list(task_config_json_path, log_folder, format)
+        print(f"[{datetime.now()}] Working on task: {task_config_json_path}...", flush=True)
         for grade_attempt_i in range(MAX_NUM_RETRIES):
             try:
                 score = evaluator(

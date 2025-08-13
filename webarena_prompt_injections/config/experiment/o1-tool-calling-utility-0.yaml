@@ -1,0 +1,11 @@
+short_model_name: "o1"
+skip_docker_build: true
+max_actions: 20
+system_objective_message_role: "system"  
+max_observations_to_keep: 3
+scaffolding: "tool-calling"
+use_defensive_system_prompt: False
+enable_thinking: False
+enable_interleaved_thinking: False
+tasks: "task_configs/utility_clean.json"  # Path to the JSON file describing the webarena tasks
+experiment_group: "utility-0"

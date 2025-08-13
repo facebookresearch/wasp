@@ -1,12 +1,11 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import json
 import os
+import sys
 import click
-import subprocess
-import tempfile
 from openai import AzureOpenAI, OpenAI
 from browser_env import ScriptBrowserEnv
-from browser_env.auto_login import get_site_comb_from_filepath
+from browser_env.env_config import ACCOUNTS
 from tool_calling_utils import (
     SYSTEM_PROMPT,
     WEB_TOOLS_DEFINITION,
@@ -17,11 +16,10 @@ from tool_calling_utils import (
 class GPTWebAgent:
     def __init__(self, model: str, filepath_to_trace_log: str):
         if "AZURE_API_ENDPOINT" in os.environ and "AZURE_API_KEY" in os.environ:
-            api_version = "2024-10-21" if "AZURE_API_VERSION" not in os.environ else os.environ["AZURE_API_VERSION"]
             client = AzureOpenAI(
                 azure_endpoint=os.environ["AZURE_API_ENDPOINT"],
                 api_key=os.environ["AZURE_API_KEY"],
-                api_version=api_version,
+                api_version=os.environ["AZURE_API_VERSION"],
             )
         elif "OPENAI_API_KEY" in os.environ:
             client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -58,25 +56,44 @@ class GPTWebAgent:
         self.browser_env.close()
         self.trace_log_file.close()
 
-    def _call_model(self, messages: list[dict]):
+    def _login_to_gitlab(self, env_ip: str):
+        page = self.browser_env.page
+        username = ACCOUNTS["gitlab"]["username"]
+        password = ACCOUNTS["gitlab"]["password"]
+        page.goto(f"{env_ip}/users/sign_in")
+        page.get_by_test_id("username-field").click()
+        page.get_by_test_id("username-field").fill(username)
+        page.get_by_test_id("username-field").press("Tab")
+        page.get_by_test_id("password-field").fill(password)
+        page.get_by_test_id("sign-in-button").click()
 
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                tools=self.tools_definitions,
-            )
-            print(
-                f"Received model response. Used {completion.usage.prompt_tokens} prompt tokens and {completion.usage.completion_tokens} completion tokens"
-            )
-            return _parse_response_to_json(completion.choices[0].message)
-        except Exception as e:
-            print(f"Error occurred while requesting OpenAI API: {e}")
-            return {
-                "role": "assistant",
-                "content": f"Error occurred while requesting OpenAI API: {e}",
-                "tool_calls": [],
-            }
+    def _login_to_reddit(self, env_ip: str):
+        page = self.browser_env.page
+        username = ACCOUNTS["reddit"]["username"]
+        password = ACCOUNTS["reddit"]["password"]
+        page.goto(f"{env_ip}/login")
+        page.get_by_label("Username").fill(username)
+        page.get_by_label("Password").fill(password)
+        page.get_by_role("button", name="Log in").click()
+
+    def login(self, sites: list[str], env_ip: str):
+        if "gitlab" in sites:
+            self._login_to_gitlab(env_ip)
+
+        if "reddit" in sites:
+            self._login_to_reddit(env_ip)
+
+    def _call_model(self, messages: list[dict]):
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            tools=self.tools_definitions,
+        )
+        print(
+            f"Received model response. Used {completion.usage.prompt_tokens} prompt tokens and {completion.usage.completion_tokens} completion tokens",
+            file=sys.stderr,
+        )
+        return _parse_response_to_json(completion.choices[0].message)
 
     def _execute_requested_tool_calls(self, tool_calls: list[dict]) -> list[dict]:
         # we will consistently return a list of dicitonaries in the message format
@@ -142,9 +159,17 @@ URL: {self.browser_env.page.url}
         user_objective: str,
         max_actions: int,
         max_observations_to_keep: int,
+        system_objective_message_role: str = "system",
     ):
         messages = []
-        system_message = {"role": "system", "content": SYSTEM_PROMPT}
+        print(
+            f"Now using {system_objective_message_role} role for system message.",
+            file=sys.stderr,
+        )
+        system_message = {
+            "role": system_objective_message_role,
+            "content": SYSTEM_PROMPT,
+        }
         messages.append(system_message)
 
         user_intent_message = {
@@ -157,7 +182,8 @@ URL: {self.browser_env.page.url}
             model_response_message = self._call_model(messages)
 
             print(
-                f"Model [{self.model}] response {action_number} {model_response_message['content']}"
+                f"Model [{self.model}] response {action_number} {model_response_message['content']}",
+                file=sys.stderr,
             )
 
             result_of_execution = self._execute_requested_tool_calls(
@@ -167,7 +193,7 @@ URL: {self.browser_env.page.url}
             messages.append(model_response_message)
 
             if len(result_of_execution) < 1:
-                print("Agent did not call any tools; exiting.")
+                print("Agent did not call any tools; exiting.", file=sys.stderr)
                 break
 
             messages.extend(result_of_execution)
@@ -176,9 +202,11 @@ URL: {self.browser_env.page.url}
 
             if result_of_execution[0]["role"] == "stop":
                 print(
-                    f"Agent finished with stop action and answer {result_of_execution[0]['answer']}"
+                    f"Agent finished with stop action and answer {result_of_execution[0]['answer']}",
+                    file=sys.stderr,
                 )
-                break
+                return result_of_execution[0]["answer"]
+
             _maybe_filter_tool_call_results(messages, max_observations_to_keep)
 
 
@@ -239,7 +267,11 @@ def _parse_response_to_json(response_message):
 
 
 @click.command()
-@click.option("--webarena_config_path", type=str, help="path to the json config describing the task")
+@click.option(
+    "--task-config",
+    type=str,
+    help="The JSON-encoded task config to run the agent for.",
+)
 @click.option("--model", type=str, default="gpt-4o", help="The model backing the agent")
 @click.option(
     "--trace-log-filepath",
@@ -256,53 +288,54 @@ def _parse_response_to_json(response_message):
     default=3,
     help="The maximum number of past tool call results to keep",
 )
+@click.option(
+    "--system_objective_message_role",
+    type=click.Choice(["system", "developer"]),
+    default="system",
+    help="The role for the system objective message",
+)
 def main(
-    webarena_config_path,
+    task_config,
     model,
     trace_log_filepath,
     max_actions,
     max_observations_to_keep,
+    system_objective_message_role,
 ):
-    with open(webarena_config_path) as f:
-        _c = json.load(f)
-        start_url = _c["start_url"]
-        user_objective = _c["intent"]
-        # try automatically login, ignore if error occurs since agent has credentials in the system_prompt
-        if _c["storage_state"]:
-            try:
-                cookie_file_name = os.path.basename(_c["storage_state"])
-                comb = get_site_comb_from_filepath(cookie_file_name)
-                temp_dir = tempfile.mkdtemp()
-                # subprocess to renew the cookie
-                subprocess.run(
-                    [
-                        "python",
-                        "browser_env/auto_login.py",
-                        "--auth_folder",
-                        temp_dir,
-                        "--site_list",
-                        *comb,
-                    ]
-                )
-                _c["storage_state"] = f"{temp_dir}/{cookie_file_name}"
-                assert os.path.exists(_c["storage_state"])
-                # update the config file
-                config_file = f"{temp_dir}/{os.path.basename(webarena_config_path)}"
-                with open(config_file, "w") as f:
-                    json.dump(_c, f)
-            except Exception as e:
-                print(f"Failed to automatically log in: {e}")
-                print("Ignore this failure since agent has credentials in the system_prompt")
+    task_config = json.loads(task_config)
+
+    start_url = task_config["start_url"]
+    user_objective = task_config["intent"]
+    env_ip = task_config["env_ip"]
 
     with GPTWebAgent(
         model,
         trace_log_filepath,
     ) as agent:
-        agent.loop(
+        print(
+            f"Setting up tool-calling agent by logging into {task_config['sites']} on {env_ip}",
+            file=sys.stderr,
+        )
+        agent.login(task_config["sites"], env_ip)
+
+        print(
+            f"Starting tool-calling agent with intent: {user_objective} on {start_url}",
+            file=sys.stderr,
+        )
+        answer = agent.loop(
             start_url=start_url,
             user_objective=user_objective,
             max_actions=max_actions,
             max_observations_to_keep=max_observations_to_keep,
+            system_objective_message_role=system_objective_message_role,
+        )
+        print(
+            json.dumps(
+                {
+                    "answer": answer,
+                    "last_url": agent.browser_env.page.url,
+                }
+            )
         )
 
 

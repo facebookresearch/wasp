@@ -10,42 +10,90 @@ from utils import load_prompt_injection_config
 from tqdm import tqdm
 import click
 
+from environment_setup import reset_reddit_upvotes_to_one
+
 
 def delete_all_reddit_posts_by_user(
     reddit_editor: RedditEditor,
-    username: str,
-    password: str,
-    max_attempts: int,
+    user_username: str,
+    user_password: str,
+    max_attempts: int = 3,
     **kwargs,
 ):
     try:
         with reddit_editor:
-            reddit_editor.login(username, password)
-            reddit_editor.delete_all_posts_by_username(username, max_attempts)
+            reddit_editor.login(user_username, user_password)
+            reddit_editor.delete_all_posts_by_username(user_password, max_attempts)
     except WebArenaEditorException as e:
         if "Failed to login" in str(e):
             print(
-                f"Did not delete {username} with password {password}. Likely does not exist or password is wrong."
+                f"Did not delete all posts by user {user_username} with password {user_password}. Likely does not exist or password is wrong."
             )
         else:
             raise
 
 
+def delete_reddit_post_by_username_and_title(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    action_post_title: str,
+    **kwargs,
+):
+    with reddit_editor:
+        reddit_editor.login(user_username, user_password)
+        reddit_editor.delete_user_post_by_title(user_username, action_post_title)
+
+
+def delete_reddit_post_by_url_and_delete_all_reddit_posts_by_user(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    post_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_reddit_post_by_url(
+        reddit_editor, attacker_username, password, post_url, **kwargs
+    )
+    delete_all_reddit_posts_by_user(
+        reddit_editor, user_username, user_password, max_attempts=3
+    )
+
+
+def delete_reddit_post_by_url_and_reset_votes(
+    reddit_editor: RedditEditor,
+    attacker_username: str,
+    password: str,
+    post_url: str,
+    user_username: str,
+    user_password: str,
+    post_slug: str,
+    **kwargs,
+):
+    delete_reddit_post_by_url(
+        reddit_editor, attacker_username, password, post_url, **kwargs
+    )
+
+    reset_reddit_upvotes_to_one(reddit_editor, user_username, user_password, post_slug)
+
+
 def delete_reddit_post_by_url(
     reddit_editor: RedditEditor,
-    username: str,
-    password: str,
-    user_post_url: str,
+    user_username: str,
+    user_password: str,
+    users_post_url: str,
     **kwargs,
 ):
     try:
         with reddit_editor:
-            reddit_editor.login(username, password)
-            reddit_editor.delete_post_by_url(url=user_post_url)
+            reddit_editor.login(user_username, user_password)
+            reddit_editor.delete_post_by_url(url=users_post_url)
     except WebArenaEditorException as e:
         if "Failed to login" in str(e):
             print(
-                f"Did not delete {username} with password {password}. Likely does not exist or password is wrong."
+                f"Did not delete posts by user {user_username} with password {user_password} at {users_post_url}. Account likely does not exist or password is wrong."
             )
         else:
             raise
@@ -53,59 +101,195 @@ def delete_reddit_post_by_url(
 
 def delete_all_comments_on_post_by_user(
     reddit_editor: RedditEditor,
-    username: str,
-    password: str,
-    instantiated_action_url: str,
+    user_username: str,
+    user_password: str,
+    user_post_url: str,
     max_attempts: int,
     **kwargs,
 ):
     try:
         with reddit_editor:
-            reddit_editor.login(username, password)
+            reddit_editor.login(user_username, user_password)
             reddit_editor.delete_all_comments_on_post_by_user(
-                instantiated_action_url, max_attempts
+                user_post_url, max_attempts
             )
     except WebArenaEditorException as e:
         if "Failed to login" in str(e):
             print(
-                f"Did not delete {username} with password {password}. Likely does not exist or password is wrong."
+                f"Did not delete comments under {user_post_url} when loggining as {user_username} with password {user_password}. Likely does not exist or password is wrong."
             )
         else:
             raise
 
 
+def delete_all_comments_on_post_by_forum_and_id(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    forum: str,
+    id: str,
+    max_attempts: int = 3,
+    **kwargs,
+):
+    delete_all_comments_on_post_by_user(
+        reddit_editor,
+        user_username,
+        user_password,
+        user_post_url=f"{reddit_editor.reddit_domain}/f/{forum}/{id}",
+        max_attempts=max_attempts,
+        **kwargs,
+    )
+
+
+def delete_reddit_post_by_url_and_delete_comments_on_post_by_forum_and_id(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    post_url: str,
+    forum: str,
+    id: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_reddit_post_by_url(
+        reddit_editor, attacker_username, password, post_url, **kwargs
+    )
+    delete_all_comments_on_post_by_forum_and_id(
+        reddit_editor,
+        user_username,
+        user_password,
+        forum=forum,
+        id=id,
+    )
+
+
 def reset_reddit_user_email(
-    reddit_editor: RedditEditor, username: str, password: str, **kwargs
+    reddit_editor: RedditEditor, user_username: str, user_password: str, **kwargs
 ):
     try:
         with reddit_editor:
-            reddit_editor.login(username, password)
-            reddit_editor.reset_email(username)
+            reddit_editor.login(user_username, user_password)
+            reddit_editor.reset_email(user_username)
     except WebArenaEditorException as e:
         print(f"Error in resetting reddit account email: {e}")
+
+
+def unblock_reddit_user(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    username_to_block: str,
+    **kwargs,
+):
+    try:
+        with reddit_editor:
+            reddit_editor.login(user_username, user_password)
+            reddit_editor.unblock_user(user_username, username_to_block)
+    except WebArenaEditorException as e:
+        if "is not in block list at" in str(e):
+            print(
+                f"User {username_to_block} is not in the block list for user {user_username}. Skipping unblocking."
+            )
+        else:
+            raise e
+
+
+def delete_reddit_post_by_url_and_unblock_user(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    post_url: str,
+    attacker_username: str,
+    password: str,
+    username_to_block: str,
+    **kwargs,
+):
+    delete_reddit_post_by_url(
+        reddit_editor, attacker_username, password, post_url, **kwargs
+    )
+    unblock_reddit_user(
+        reddit_editor,
+        user_username,
+        user_password,
+        username_to_block=username_to_block,
+    )
+
+
+def delete_reddit_post_by_url_and_reset_reddit_user_email(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    post_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_reddit_post_by_url(
+        reddit_editor, attacker_username, password, post_url, **kwargs
+    )
+    reset_reddit_user_email(reddit_editor, user_username, user_password)
 
 
 def delete_reddit_user_messages(
-    reddit_editor: RedditEditor, username: str, password: str, **kwargs
+    reddit_editor: RedditEditor, user_username: str, user_password: str, **kwargs
 ):
     try:
         with reddit_editor:
-            reddit_editor.login(username, password)
-            reddit_editor.delete_all_messages_by_user(username)
+            reddit_editor.login(user_username, user_password)
+            reddit_editor.delete_all_messages_by_user(user_username)
     except WebArenaEditorException as e:
-        print(f"Error in resetting reddit account email: {e}")
+        print(
+            f"Error in resetting deleting user messages for user {user_username} with password {user_password} {e}"
+        )
+
+
+def delete_reddit_post_by_url_and_delete_reddit_user_messages(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    post_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_reddit_post_by_url(
+        reddit_editor, attacker_username, password, post_url, **kwargs
+    )
+    delete_reddit_user_messages(reddit_editor, user_username, user_password)
+
+
+def delete_reddit_post_by_attacker_and_another_by_user(
+    reddit_editor: RedditEditor,
+    user_username: str,
+    user_password: str,
+    user_post_url: str,
+    post_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_reddit_post_by_url(
+        reddit_editor, attacker_username, password, post_url, **kwargs
+    )
+    delete_reddit_post_by_url(
+        reddit_editor,
+        user_username,
+        user_password,
+        user_post_url,
+    )
 
 
 def delete_reddit_instantiated_posts_and_comments(
     reddit_editor: RedditEditor,
     attacker_username: str,
-    attacker_password: str,
+    password: str,
     user_username: str,
     user_password: str,
     **kwargs,
 ):
     delete_all_reddit_posts_by_user(
-        reddit_editor, attacker_username, attacker_password, max_attempts=3
+        reddit_editor, attacker_username, password, max_attempts=3
     )
     delete_all_reddit_posts_by_user(
         reddit_editor, user_username, user_password, max_attempts=1
@@ -163,6 +347,9 @@ def delete_project_owned_by_agent_user_and_attacker_account(
     password: str,
     **kwargs,
 ):
+    """
+    Deletes the project owned by the agent user and then deletes the attacker's account.
+    """
     delete_project_owned_by_agent_user(gitlab_editor, project_name)
     delete_attacker_account(
         gitlab_editor,
@@ -179,19 +366,13 @@ def attempt_to_delete_project_with_different_namespaces(
     password: str,
     **kwargs,
 ):
-    failed_deletion = False
     try:
         delete_project_owned_by_agent_user(gitlab_editor, project_name)
     except WebArenaEditorException as e:
-        if str(e).startswith("Currently logged in user cannot"):
-            failed_deletion = True
-        else:
-            raise
-    if failed_deletion:
         with gitlab_editor:
             gitlab_editor.login(
-                attacker_username,
-                password,
+                AGENT_ACCOUNTS["gitlab"]["username"],
+                AGENT_ACCOUNTS["gitlab"]["password"],
             )
             gitlab_editor.delete_project(new_namespace, project_name)
 
@@ -221,6 +402,26 @@ def attempt_to_delete_project_with_different_namespaces_and_attacker_account(
     )
 
 
+def attempt_to_delete_project_with_different_namespaces_and_attacker_account_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    project_name: str,
+    new_namespace: str,
+    attacker_username: str,
+    password: str,
+    issue_url: str,
+    **kwargs,
+):
+    attempt_to_delete_project_with_different_namespaces(
+        gitlab_editor, project_name, new_namespace, attacker_username, password
+    )
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor,
+        issue_url,
+        attacker_username,
+        password,
+    )
+
+
 def make_agent_user_profile_public(gitlab_editor: GitlabEditor, **kwargs):
     """
     Makes the agent user's profile public.
@@ -231,6 +432,22 @@ def make_agent_user_profile_public(gitlab_editor: GitlabEditor, **kwargs):
         )
         gitlab_editor.toggle_private_profile(False)
     return {}
+
+
+def make_agent_user_profile_public_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    issue_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    """
+    Makes the agent user's profile public and deletes the issue created by the attacker.
+    """
+    make_agent_user_profile_public(gitlab_editor)
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor, issue_url, attacker_username, password
+    )
 
 
 def reset_zshrc_file_in_repo(
@@ -258,7 +475,23 @@ def reset_zshrc_file_in_repo(
             "environment_editors/prisitine_dotfiles_zshrc.txt",
         )
 
-    return {}
+
+def reset_zshrc_file_in_repo_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    project_owner: str,
+    project_name: str,
+    issue_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    """
+    Resets the .zshrc file in the specified project and deletes the issue created by the attacker.
+    """
+    reset_zshrc_file_in_repo(gitlab_editor, project_owner, project_name)
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor, issue_url, attacker_username, password
+    )
 
 
 def delete_merge_request_and_branch(
@@ -288,14 +521,38 @@ def delete_deploy_key(
         gitlab_editor.delete_deploy_key(project_owner, project_name)
 
 
+def delete_deploy_key_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    project_owner: str,
+    project_name: str,
+    attacker_username: str,
+    password: str,
+    issue_url: str,
+    **kwargs,
+):
+    delete_deploy_key(gitlab_editor, project_owner, project_name)
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor,
+        issue_url,
+        attacker_username,
+        password,
+    )
+
+
 def delete_deploy_token(
-    gitlab_editor: GitlabEditor, project_owner: str, project_name: str, **kwargs
+    gitlab_editor: GitlabEditor,
+    project_owner: str,
+    project_name: str,
+    deploy_token_name: str,
+    **kwargs,
 ):
     with gitlab_editor:
         gitlab_editor.login(
             AGENT_ACCOUNTS["gitlab"]["username"], AGENT_ACCOUNTS["gitlab"]["password"]
         )
-        gitlab_editor.delete_deploy_token(project_owner, project_name)
+        gitlab_editor.delete_deploy_token(
+            project_owner, project_name, deploy_token_name
+        )
 
 
 def delete_webhook(
@@ -308,12 +565,55 @@ def delete_webhook(
         gitlab_editor.delete_webhook(project_owner, project_name)
 
 
+def delete_issue_created_by_attacker_and_delete_webhook(
+    gitlab_editor: GitlabEditor,
+    project_owner: str,
+    project_name: str,
+    issue_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor, issue_url, attacker_username, password, **kwargs
+    )
+    delete_webhook(gitlab_editor, project_owner, project_name)
+
+
+def delete_issue_created_by_agent_user(
+    gitlab_editor: GitlabEditor,
+    issue_url: str,
+    **kwargs,
+):
+    """
+    Deletes the issue created by the agent user in the specified project.
+    """
+    with gitlab_editor:
+        gitlab_editor.login(
+            AGENT_ACCOUNTS["gitlab"]["username"], AGENT_ACCOUNTS["gitlab"]["password"]
+        )
+        gitlab_editor.delete_issue_given_url(issue_url)
+
+
 def delete_ssh_key(gitlab_editor: GitlabEditor, **kwargs):
     with gitlab_editor:
         gitlab_editor.login(
             AGENT_ACCOUNTS["gitlab"]["username"], AGENT_ACCOUNTS["gitlab"]["password"]
         )
         gitlab_editor.delete_ssh_key()
+
+
+def delete_ssh_key_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    issue_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_ssh_key(gitlab_editor)
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor, issue_url, attacker_username, password
+    )
 
 
 def delete_access_token(gitlab_editor: GitlabEditor, **kwargs):
@@ -324,19 +624,117 @@ def delete_access_token(gitlab_editor: GitlabEditor, **kwargs):
         gitlab_editor.delete_access_token()
 
 
+def delete_access_token_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    issue_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    delete_access_token(gitlab_editor)
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor, issue_url, attacker_username, password
+    )
+
+
+def delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    issue_url: str,
+    attacker_username: str,
+    password: str,
+    **kwargs,
+):
+    with gitlab_editor:
+        gitlab_editor.login(
+            AGENT_ACCOUNTS["gitlab"]["username"], AGENT_ACCOUNTS["gitlab"]["password"]
+        )
+        gitlab_editor.delete_issue_given_url(issue_url)
+
+    delete_attacker_account(
+        gitlab_editor,
+        attacker_username,
+        password,
+    )
+
+
+def delete_deploy_token_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    project_owner: str,
+    project_name: str,
+    attacker_username: str,
+    password: str,
+    issue_url: str,
+    deploy_token_name: str,
+    **kwargs,
+):
+    delete_deploy_token(gitlab_editor, project_owner, project_name, deploy_token_name)
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor,
+        issue_url,
+        attacker_username,
+        password,
+    )
+
+
+def delete_project_owned_by_agent_user_and_delete_issue_created_by_attacker_and_attacker_account(
+    gitlab_editor: GitlabEditor,
+    project_name: str,
+    attacker_username: str,
+    password: str,
+    issue_url: str,
+    **kwargs,
+):
+    delete_project_owned_by_agent_user(
+        gitlab_editor,
+        project_name,
+    )
+    delete_issue_created_by_attacker_and_attacker_account(
+        gitlab_editor,
+        issue_url,
+        attacker_username,
+        password,
+    )
+
+
 CLEANUP_ACTION_NAME_TO_FUNCTION = {
     "attempt_to_delete_project_with_different_namespaces_and_attacker_account": attempt_to_delete_project_with_different_namespaces_and_attacker_account,
+    "attempt_to_delete_project_with_different_namespaces_and_attacker_account_and_delete_issue_created_by_attacker_and_attacker_account": attempt_to_delete_project_with_different_namespaces_and_attacker_account_and_delete_issue_created_by_attacker_and_attacker_account,
     "make_agent_user_profile_public": make_agent_user_profile_public,
+    "make_agent_user_profile_public_and_delete_issue_created_by_attacker_and_attacker_account": make_agent_user_profile_public_and_delete_issue_created_by_attacker_and_attacker_account,
     "reset_zshrc_file_in_repo": reset_zshrc_file_in_repo,
+    "reset_zshrc_file_in_repo_and_delete_issue_created_by_attacker_and_attacker_account": reset_zshrc_file_in_repo_and_delete_issue_created_by_attacker_and_attacker_account,
     "delete_project_owned_by_agent_user": delete_project_owned_by_agent_user,
     "delete_project_owned_by_agent_user_and_attacker_account": delete_project_owned_by_agent_user_and_attacker_account,
+    "delete_project_owned_by_agent_user_and_delete_issue_created_by_attacker_and_attacker_account": delete_project_owned_by_agent_user_and_delete_issue_created_by_attacker_and_attacker_account,
+    "delete_issue_created_by_attacker_and_attacker_account": delete_issue_created_by_attacker_and_attacker_account,
+    "delete_deploy_token_and_delete_issue_created_by_attacker_and_attacker_account": delete_deploy_token_and_delete_issue_created_by_attacker_and_attacker_account,
     "delete_reddit_instantiated_posts_and_comments": delete_reddit_instantiated_posts_and_comments,
     "delete_merge_request_and_branch": delete_merge_request_and_branch,
     "delete_deploy_key": delete_deploy_key,
+    "delete_deploy_key_and_delete_issue_created_by_attacker_and_attacker_account": delete_deploy_key_and_delete_issue_created_by_attacker_and_attacker_account,
     "delete_deploy_token": delete_deploy_token,
     "delete_webhook": delete_webhook,
+    "delete_issue_created_by_attacker_and_delete_webhook": delete_issue_created_by_attacker_and_delete_webhook,
     "delete_ssh_key": delete_ssh_key,
+    "delete_ssh_key_and_delete_issue_created_by_attacker_and_attacker_account": delete_ssh_key_and_delete_issue_created_by_attacker_and_attacker_account,
     "delete_access_token": delete_access_token,
+    "delete_access_token_and_delete_issue_created_by_attacker_and_attacker_account": delete_access_token_and_delete_issue_created_by_attacker_and_attacker_account,
+    "reset_reddit_user_email": reset_reddit_user_email,
+    "delete_all_comments_on_post_by_user": delete_all_comments_on_post_by_user,
+    "delete_all_comments_on_post_by_forum_and_id": delete_all_comments_on_post_by_forum_and_id,
+    "delete_all_reddit_posts_by_user": delete_all_reddit_posts_by_user,
+    "delete_reddit_post_by_url": delete_reddit_post_by_url,
+    "delete_reddit_user_messages": delete_reddit_user_messages,
+    "delete_reddit_post_by_url_and_delete_all_reddit_posts_by_user": delete_reddit_post_by_url_and_delete_all_reddit_posts_by_user,
+    "delete_reddit_post_by_attacker_and_another_by_user": delete_reddit_post_by_attacker_and_another_by_user,
+    "delete_reddit_post_by_url_and_delete_comments_on_post_by_forum_and_id": delete_reddit_post_by_url_and_delete_comments_on_post_by_forum_and_id,
+    "delete_reddit_post_by_url_and_delete_reddit_user_messages": delete_reddit_post_by_url_and_delete_reddit_user_messages,
+    "delete_reddit_post_by_url_and_reset_reddit_user_email": delete_reddit_post_by_url_and_reset_reddit_user_email,
+    "delete_reddit_post_by_url_and_reset_votes": delete_reddit_post_by_url_and_reset_votes,
+    "delete_reddit_post_by_url_and_unblock_user": delete_reddit_post_by_url_and_unblock_user,
+    "delete_issue_created_by_agent_user": delete_issue_created_by_agent_user,
+    "unblock_reddit_user": unblock_reddit_user,
+    "delete_reddit_post_by_username_and_title": delete_reddit_post_by_username_and_title,
 }
 
 

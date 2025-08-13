@@ -28,6 +28,49 @@ In the CLI, we log the list of messages in each request on a new line in the `.j
 
 You can use the `render_conversation_logs.py` script to visualize them with a streamlit app.
 
+## Helping the Agent with Scripted Log-In
+If you would like to start the agent off after it has already logged in to the WebArena GitLab or Reddit environmennts, the following scripts run the sequence of click and type actions starting from a blank desktop screen in the Docker automatically.
+
+**Note**: These actions also assume that the Firefox "Save Password" suggestionh has appeared and dismiss it after logging in. All actions are scripted with coordinates, so if the underlying Docker updates such that things are positioned differently, this will break.
+
+### Gitlab
+```bash
+docker run \
+ -e API_PROVIDER=bedrock \
+ -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+ -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+ -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
+ -e AWS_REGION=$AWS_REGION \
+ -v $(pwd)/computer_use_demo:/home/computeruse/computer_use_demo/ \
+ -v $(pwd)/claude_computer_use_logs:/home/computeruse/claude_computer_use_logs \
+ --rm \
+ -it computer-use-demo:local \
+ --user-prompt "Take a screenshot and report the repos that you see." \
+ --conversation-log-file-path "/home/computeruse/claude_computer_use_logs/autologin_to_gitlab_trace.jsonl" \
+ --model "arn:aws:bedrock:us-west-2:302263051492:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0" \
+ --autologin-tool-calls "/home/computeruse/computer_use_demo/gitlab_login_tool_calls_sequence.json" \
+ --login-url "http://3.138.94.125:8023"
+```
+
+### Reddit
+```bash
+docker run \
+ -e API_PROVIDER=bedrock \
+ -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+ -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+ -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
+ -e AWS_REGION=$AWS_REGION \
+ -v $(pwd)/computer_use_demo:/home/computeruse/computer_use_demo/ \
+ -v $(pwd)/claude_computer_use_logs:/home/computeruse/claude_computer_use_logs \
+ --rm \
+ -it computer-use-demo:local \
+ --user-prompt "Take a screenshot and report the forums that you see." \
+ --conversation-log-file-path "/home/computeruse/claude_computer_use_logs/autologin_to_reddit_trace.jsonl" \
+ --model "arn:aws:bedrock:us-west-2:302263051492:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0" \
+ --autologin-tool-calls "/home/computeruse/computer_use_demo/reddit_login_tool_calls_sequence.json" \
+ --login-url "http://3.138.94.125:9999/login"
+```
+
 # Original README Below
 
 > [!CAUTION]

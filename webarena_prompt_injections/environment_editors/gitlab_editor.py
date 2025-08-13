@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import re
 import os
+import sys
 from playwright.sync_api import TimeoutError, expect
 from .base_environment_editor import BaseWebArenaEditor, WebArenaEditorException
 from urllib.parse import urlparse, urlunparse
@@ -62,7 +63,10 @@ class GitlabEditor(BaseWebArenaEditor):
                 with self.page.expect_navigation():
                     self.page.click('button:has-text("Get started!")')
             except Exception as e:
-                print("Unknown exception while responding to the survey after login")
+                print(
+                    f"Unknown exception while responding to the survey after login {str(e)}",
+                    file=sys.stderr,
+                )
 
         if self.page.url.strip("/") != self.gitlab_domain:
             screenshot_path = "/tmp/debug_gitlabeditor_login.png"
@@ -160,7 +164,10 @@ class GitlabEditor(BaseWebArenaEditor):
         except Exception:
             screenshot_path = "/tmp/debug_delete_issue.png"
             self.page.screenshot(path=screenshot_path)
-            print(f"Failed to delete issue at {url_of_issue}. Screenshot at {screenshot_path}, skipping...")
+            print(
+                f"Failed to delete issue at {url_of_issue}. Screenshot at {screenshot_path}, skipping...",
+                file=sys.stderr,
+            )
 
     def delete_all_issues_in_project(
         self, project_owner: str, project_name: str, max_timeout: float = 2000.0
@@ -194,12 +201,16 @@ class GitlabEditor(BaseWebArenaEditor):
             try:
                 self.page.wait_for_selector(issue_selector, timeout=max_timeout)
             except TimeoutError:
-                print(f"Could not find any more issues at {url_of_issues_page}")
+                print(
+                    f"Could not find any more issues at {url_of_issues_page}",
+                    file=sys.stderr,
+                )
                 return
 
             list_of_issues = self.page.locator(issue_selector)
             print(
-                f"Bulk deleting all issues in {project_owner}/{project_name}. Remaining {list_of_issues.count()} issues on {self.page.url}"
+                f"Bulk deleting all issues in {project_owner}/{project_name}. Remaining {list_of_issues.count()} issues on {self.page.url}",
+                file=sys.stderr,
             )
 
     def create_private_group(self, group_name):
@@ -375,7 +386,9 @@ class GitlabEditor(BaseWebArenaEditor):
 
                 # we end up here if there's a name collision
                 if self.page.url.endswith("projects"):
-                    raise WebArenaEditorException("Failed to end up at the expected URL")
+                    raise WebArenaEditorException(
+                        "Failed to end up at the expected URL"
+                    )
 
         except (TimeoutError, WebArenaEditorException):
             screenshot_path = "/tmp/debug_gitlabeditor_project_creation.png"
@@ -390,8 +403,11 @@ class GitlabEditor(BaseWebArenaEditor):
                 # Join them into a single message
                 error_message = "; ".join(errors)
                 if "taken" in error_message:
-                    print(f"Warning! It looks like the project {project_name} is already created. "
-                          f"This is not an error but screenshot is still taken at {screenshot_path}. Proceeding to the next case...")
+                    print(
+                        f"Warning! It looks like the project {project_name} is already created. "
+                        f"This is not an error but screenshot is still taken at {screenshot_path}. Proceeding to the next case...",
+                        file=sys.stderr,
+                    )
                     return project_name
                 else:
                     raise WebArenaEditorException(
@@ -531,7 +547,10 @@ class GitlabEditor(BaseWebArenaEditor):
         existing_accounts = _get_exisiting_members()
 
         if user_to_add in existing_accounts:
-            print(f"User {user_to_add} was already a member of {group_to_add_to}")
+            print(
+                f"User {user_to_add} was already a member of {group_to_add_to}",
+                file=sys.stderr,
+            )
             return
 
         self.page.click('button:has-text("Invite members")')
@@ -720,7 +739,10 @@ class GitlabEditor(BaseWebArenaEditor):
         try:
             self._maybe_raise_page_not_found(url_of_action)
         except WebArenaEditorException:
-            print(f"Project page {url_of_action} not found, probably has already been deleted! ")
+            print(
+                f"Project page {url_of_action} not found, probably has already been deleted! ",
+                file=sys.stderr,
+            )
             return
 
         self.page.click(
@@ -1072,43 +1094,54 @@ class GitlabEditor(BaseWebArenaEditor):
         except Exception as e:
             screenshot_path = "/tmp/debug_gitlabeditor_delete_deploykeys.png"
             self.page.screenshot(path=screenshot_path)
-            print(f"[Warning] No Delete button or other error occurred: {e}. "
-                  f"Maybe deploy key is already deleted or do not exist. "
-                  f"Screenshot can be found at: {screenshot_path}")
+            print(
+                f"[Warning] No Delete button or other error occurred: {e}. "
+                f"Maybe deploy key is already deleted or do not exist. "
+                f"Screenshot can be found at: {screenshot_path}",
+                file=sys.stderr,
+            )
 
-    def delete_deploy_token(self, namespace_name: str, project_name: str):
-        url_of_action = (
-            f"{self.gitlab_domain}/{namespace_name}/{project_name}/-/settings/repository#js-deploy-tokens"
-        )
+    def delete_deploy_token(
+        self, namespace_name: str, project_name: str, deploy_token_name: str
+    ):
+        url_of_action = f"{self.gitlab_domain}/{namespace_name}/{project_name}/-/settings/repository#js-deploy-tokens"
         self.page.goto(
             url_of_action,
             wait_until="networkidle",
         )
-        expand_selector = "#js-deploy-tokens > div.settings-header > button"
-        btn_delete_selector = "#js-deploy-tokens > div.settings-content > div.table-responsive.deploy-tokens > table > tbody > tr > td:nth-child(6) > div > button"
-        confirm_delete_button = "#revoke-modal-1___BV_modal_footer_ > a"
         try:
-            self._wait_for_selector(expand_selector, timeout=3000)
-            self.page.click(expand_selector)
+            # Find the row containing the deploy token with the specified name
+            row_selector = (
+                f"table tbody tr:has(td:first-child:text-is('{deploy_token_name}'))"
+            )
+            self.page.wait_for_selector(row_selector, timeout=3000)
+
+            # Find and click the revoke button in that specific row
+            revoke_button_selector = (
+                f"{row_selector} button[data-testid='revoke-button']"
+            )
+            self.page.wait_for_selector(revoke_button_selector, timeout=3000)
+            self.page.click(revoke_button_selector)
+
+            # Handle the confirmation dialog
             self.page.wait_for_timeout(1000)  # Wait for 1 second
-            self.page.wait_for_selector(btn_delete_selector, timeout=3000)
-            button = self.page.query_selector(btn_delete_selector)
-            button.click()
-            self.page.wait_for_timeout(1000)  # Wait for 1 second
+            confirm_delete_button = "#revoke-modal-1___BV_modal_footer_ > a"
             self._wait_for_selector(confirm_delete_button, timeout=3000)
             self.page.click(confirm_delete_button)
             self.page.wait_for_timeout(1000)  # Wait for 1 second
+
         except Exception as e:
             screenshot_path = "/tmp/debug_gitlabeditor_delete_deploytokens.png"
             self.page.screenshot(path=screenshot_path)
-            print(f"[Warning] No Delete button or other error occurred: {e}. "
-                  f"Maybe deploy token is already deleted or do not exist. "
-                  f"Screenshot can be found at: {screenshot_path}")
+            print(
+                f"[Warning] No Delete button or other error occurred: {e}. "
+                f"Maybe deploy token is already deleted or do not exist. "
+                f"Screenshot can be found at: {screenshot_path}",
+                file=sys.stderr,
+            )
 
     def delete_webhook(self, namespace_name: str, project_name: str):
-        url_of_action = (
-            f"{self.gitlab_domain}/{namespace_name}/{project_name}/-/hooks"
-        )
+        url_of_action = f"{self.gitlab_domain}/{namespace_name}/{project_name}/-/hooks"
         self.page.goto(
             url_of_action,
             wait_until="networkidle",
@@ -1130,18 +1163,21 @@ class GitlabEditor(BaseWebArenaEditor):
             except Exception as e:
                 screenshot_path = "/tmp/debug_gitlabeditor_delete_webhook.png"
                 self.page.screenshot(path=screenshot_path)
-                print(f"[Warning] No Delete button or other error occurred: {e}. "
-                      f"Maybe webhook is already deleted or do not exist. "
-                      f"Screenshot can be found at: {screenshot_path}")
+                print(
+                    f"[Warning] No Delete button or other error occurred: {e}. "
+                    f"Maybe webhook is already deleted or do not exist. "
+                    f"Screenshot can be found at: {screenshot_path}",
+                    file=sys.stderr,
+                )
                 break
 
     def delete_ssh_key(self):
-        url_of_action = (
-            f"{self.gitlab_domain}/-/profile/keys"
-        )
+        url_of_action = f"{self.gitlab_domain}/-/profile/keys"
         self.page.goto(url_of_action, wait_until="networkidle")
         btn_delete_selector = "#content-body > div.row.gl-mt-3.js-search-settings-section > div.col-lg-8 > div.gl-mb-3 > ul > li > div > span > div > div > button"
-        confirm_delete_button = "#confirm-modal-1___BV_modal_footer_ > button.btn.btn-danger"
+        confirm_delete_button = (
+            "#confirm-modal-1___BV_modal_footer_ > button.btn.btn-danger"
+        )
         try:
             self.page.wait_for_selector(btn_delete_selector, timeout=3000)
             button = self.page.query_selector(btn_delete_selector)
@@ -1155,14 +1191,15 @@ class GitlabEditor(BaseWebArenaEditor):
         except Exception as e:
             screenshot_path = "/tmp/debug_gitlabeditor_delete_sshkeys.png"
             self.page.screenshot(path=screenshot_path)
-            print(f"[Warning] No Delete button or other error occurred: {e}. "
-                  f"Maybe ssh key is already deleted or do not exist. "
-                  f"Screenshot can be found at: {screenshot_path}")
+            print(
+                f"[Warning] No Delete button or other error occurred: {e}. "
+                f"Maybe ssh key is already deleted or do not exist. "
+                f"Screenshot can be found at: {screenshot_path}",
+                file=sys.stderr,
+            )
 
     def delete_access_token(self):
-        url_of_action = (
-            f"{self.gitlab_domain}/-/profile/personal_access_tokens"
-        )
+        url_of_action = f"{self.gitlab_domain}/-/profile/personal_access_tokens"
         self.page.goto(
             url_of_action,
             wait_until="networkidle",
@@ -1183,9 +1220,12 @@ class GitlabEditor(BaseWebArenaEditor):
             except Exception as e:
                 screenshot_path = "/tmp/debug_gitlabeditor_delete_access_token.png"
                 self.page.screenshot(path=screenshot_path)
-                print(f"[Warning] No Delete button or other error occurred: {e}. "
-                      f"Maybe access token is already deleted or do not exist. "
-                      f"Screenshot can be found at: {screenshot_path}")
+                print(
+                    f"[Warning] No Delete button or other error occurred: {e}. "
+                    f"Maybe access token is already deleted or do not exist. "
+                    f"Screenshot can be found at: {screenshot_path}",
+                    file=sys.stderr,
+                )
                 break
 
 
